@@ -1,7 +1,9 @@
-"""
-Purpose: Road erosion processes component including pumping, crushing, scattering (and by default, flow rerouting)
-Author: Amanda Alvis
-Date: 02/26/2025
+"""Landlab component for road erosion processes including 
+pumping, crushing, scattering (and by default, flow rerouting)
+
+Last updated: February 27, 2025
+
+.. codeauthor: Amanda Alvis
 """
 
 from landlab import Component
@@ -10,99 +12,122 @@ import random as rnd
 import numpy as np
 
 class TruckPassErosion(Component):
+    r"""Calculate sediment depths for forest road cross section layers based
+    on traffic-induced, erosion-enhancing processes: pumping, crushing,
+    scattering (and by default, flow rerouting).
+
+    References
+    ----------
+    Alvis, A. D., Luce, C. H., & Istanbulluoglu, E. (2023). How does traffic 
+    affect erosion of unpaved forest roads? Environmental Reviews, 31(1), 
+    182–194. https://doi.org/10.1139/er-2022-0032
+    """
+
+    _name = "TruckPassErosion"
+
+    _unit_agnostic = False
     
-    _name = 'TruckPassErosion'
-    
-    _input_var_names = (
-        'topographic__elevation',
-        'active__depth',
-        'surfacing__depth',
-        'ballast__depth',
-    )
-    
-    _output_var_names = (        
-        'topographic__elevation',
-        'active__depth',
-        'surfacing__depth',
-        'ballast__depth',
-    )
-    
-    _var_units = {
-        'topographic__elevation': 'm',
-        'active__depth': 'm',
-        'surfacing__depth': 'm',
-        'ballast__depth': 'm',
+    _info = {
+        "active__depth": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of active layer of sediment of the road cross\
+                section",
+        },
+        "ballast__depth": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of ballast layer of the road cross section",
+        },
+        "surfacing__depth": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m/m",
+            "mapping": "link",
+            "doc": "depth of surfacing layer of the road cross section",
+        },
+        "topographic__elevation": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "Land surface topographic elevation",
+        },
     }
     
-    _var_mapping = {
-        'topographic__elevation': 'node',
-        'active__depth': 'node',
-        'surfacing__depth': 'node',
-        'ballast__depth': 'node',
-    }
-    
-    _var_doc = {
-        'topographic__elevation':
-            'elevation of the ground surface relative to some datum; \
-                this field gets updated',
-        'active__depth':
-            'elevation of the sediment surface relative to some datum; \
-                this field gets updated',
-        'surfacing__depth':
-            'depth of surfacing layer of the road cross section relative \
-                to some datum; this field gets updated',
-        'ballast__depth':
-            'depth of ballast layer of the road cross section relative \
-                to some datum; this field gets updated',
-    }
-    
-    
-    def __init__(self, grid, truck_num = 5, diffusivity = 0.0001, **kwds):
+    def __init__(
+        self, 
+        grid, 
+        truck_num = 5,
+    ):
         """Initialize TruckPassErosion.
 
         Parameters
         ----------
         grid : ModelGrid
             Landlab ModelGrid object
-
+        truck_num : int, defaults to 5
+            Average number of trucks to pass over a road segment in a day
         """
+
+        super().__init__(grid)
+
         # Store grid and parameters
         self._grid = grid
         
         # Get elevation field
-        try:
-            self.elev = self.grid.at_node['topographic__elevation']
-        except:
-            raise
+        self._elev = grid.at_node['topographic__elevation']
             
-        # Get sediment field
-        try:
-            self.sed = self.grid.at_node['active__depth']
-        except:
-            raise
-               
-        # Instantiate linear diffuser
-        self.lin_diffuse1 = LinearDiffuser(grid, linear_diffusivity=self.diffusivity)
-        #self.lin_diffuse2 = LinearDiffuser(grid, linear_diffusivity=self.diffusivity, \
-        #                                   values_to_diffuse = 'active__depth')
-        
-        #initialize truck pass and time arrays
-        self.truck_pass = []
-        self.time = []
+        # Get layers for sediment depths
+        self._active = grid.at_node['active__depth']
+        self._surfacing = grid.at_node['surfacing__depth']
+        self._ballast = grid.at_node['ballast__depth']
+
+        # Get number of trucks per day from random poisson distribution
+        self._truck_num = np.random.poisson(truck_num,1).item()
 		
-    def run_one_step(self, tire_tracks):    
-        #
-        self.sed[tire_tracks] = 0      
-        
-        rng = np.random.RandomState(2024)
-                
-        self.sed[tire_tracks[0]] -= 0.001
-        self.sed[tire_tracks[1]] -= 0.001
-        self.sed[tire_tracks[2]] += 0.0004
-        self.sed[tire_tracks[3]] += 0.0004
-        self.sed[tire_tracks[4]] += 0.0004
-        self.sed[tire_tracks[5]] += 0.0004
-        self.sed[tire_tracks[6]] += 0.0002
-        self.sed[tire_tracks[7]] += 0.0002
+    def run_one_step(self, tire_tracks):  
+        surf_fine = self._surfacing*0.275
+        surf_coarse = self._surfacing*0.725
+        ball_fine = self._ballast*0.20
+        ball_coarse = self._ballast*0.80
+
+        #scattering---we need to discuss this                
+        surf_coarse[tire_tracks[0]] -= 0.001*self._truck_num
+        surf_coarse[tire_tracks[1]] -= 0.001*self._truck_num
+        surf_coarse[tire_tracks[2]] += 0.0004*self._truck_num
+        surf_coarse[tire_tracks[3]] += 0.0004*self._truck_num
+        surf_coarse[tire_tracks[4]] += 0.0004*self._truck_num
+        surf_coarse[tire_tracks[5]] += 0.0004*self._truck_num
+        surf_coarse[tire_tracks[6]] += 0.0002*self._truck_num
+        surf_coarse[tire_tracks[7]] += 0.0002*self._truck_num
+
+        #calculate pumping fluxes
+        q_ps = u_ps*(surf_fine/self._surfacing)*self._truck_num/(timeStep_Hr*3600)
+        q_pb = u_pb*(ball_fine/self._ballast)*self._truck_num/(timeStep_Hr*3600)
+
+        #calculate crushing fluxes
+        q_cs = k_cs*(S_sc/S_s)*self._truck_num/(timeStep_Hr*3600)
+        q_cb = k_cb*(S_bc/S_b)*self._truck_num/(timeStep_Hr*3600)
+
+        #update surfacing
+        surf_coarse[tire_tracks[0]] -= q_cs*(timeStep_Hr*3600)
+        surf_coarse[tire_tracks[1]] -= q_cs*(timeStep_Hr*3600)
+        surf_fine[tire_tracks[0]] += q_cs*(timeStep_Hr*3600) - \
+            q_ps*(timeStep_Hr*3600) + q_pb*(timeStep_Hr*3600)
+        surf_fine[tire_tracks[1]] += q_cs*(timeStep_Hr*3600) - \
+            q_ps*(timeStep_Hr*3600) + q_pb*(timeStep_Hr*3600)
+        self._surfacing = surf_coarse + surf_fine
+
+        #update ballast
+
                                
-        self.elev += self.sed
+        self.elev += surf_coarse
