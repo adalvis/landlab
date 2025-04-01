@@ -73,6 +73,7 @@ from .profiler import Profiler
 from .profiler import TrickleDownProfiler
 from .radiation import Radiation
 from .river_flow_dynamics import RiverFlowDynamics
+from .road_erosion import TruckPassErosion
 from .sink_fill import SinkFiller
 from .sink_fill import SinkFillerBarnes
 from .soil_moisture import SoilInfiltrationGreenAmpt
@@ -181,6 +182,7 @@ COMPONENTS = [
     TidalFlowCalculator,
     TransportLengthHillslopeDiffuser,
     TrickleDownProfiler,
+    TruckPassErosion,
     ThresholdEroder,
     VegCA,
     Vegetation,
