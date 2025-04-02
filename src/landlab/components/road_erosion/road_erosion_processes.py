@@ -150,6 +150,12 @@ class TruckPassErosion(Component):
         each node"""
         return self._sed_added
 
+    def tire_tracks(self, centerline, half_width):
+        self._center = self._grid.nodes[:, centerline]
+        self._center_tracks = np.append(self._center-half_width, self._center+half_width)
+        self._out_center = np.append(self._center_tracks-1, self_center_tracks+1)
+        self._back_center = np.append(self._center_tracks+self._grid.num_col)#this is incorrect but I need to find the correct value)
+
     def run_one_step(self, tire_tracks): 
         active_init = self._active
         surf_init = self._surfacing
