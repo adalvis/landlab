@@ -1,7 +1,7 @@
 """Landlab component for road erosion processes including 
 pumping, crushing, scattering (and by default, flow rerouting)
 
-Last updated: March 19, 2025
+Last updated: April 17, 2025
 
 .. codeauthor: Amanda Alvis
 """
@@ -162,7 +162,7 @@ class TruckPassErosion(Component):
         each node"""
         return self._sed_added
 
-    def tire_tracks(self, centerline, half_width):
+    def calc_tire_tracks(self, centerline, half_width):
         self._center = self._grid.nodes[:, centerline]
 
         self._center_tracks = np.append(self._center-half_width,\
@@ -185,16 +185,16 @@ class TruckPassErosion(Component):
             self._left_tracks])
 
         if all(val == self._center_tracks):
-            tire_tracks = [self._center_tracks, self._out_center[0],\
+            self.tire_tracks = [self._center_tracks, self._out_center[0],\
                 self._out_center[1], self._back_center]
         elif all(val == self._right_tracks):
-            tire_tracks = [self._right_tracks, self._out_right[0],\
+            self.tire_tracks = [self._right_tracks, self._out_right[0],\
                 self._out_right[1], self._back_right]    
         else:
-            tire_tracks = [self._left_tracks, self._out_left[0],\
+            self.tire_tracks = [self._left_tracks, self._out_left[0],\
                 self._out_left[1], self._back_left]
 
-        return(tire_tracks)
+        return(self.tire_tracks)
 
     def run_one_step(self, centerline, half_width): 
         active_init = self._active
@@ -203,20 +203,22 @@ class TruckPassErosion(Component):
         self.truck_num = np.random.poisson(self.truck_num_avg,1).item()
 
         for _ in range(self.truck_num):
-            tire_tracks = self.tire_tracks(centerline, half_width)
+            tire_tracks = self.calc_tire_tracks(centerline, half_width)
 
             #scattering 
             for i in range(len(tire_tracks[0]) - 1):
-                if (self._active_coarse[tire_tracks[0][i]]) <= 0.001:     
+                if (self._active_coarse[tire_tracks[0][i]]) <= 0.01:     
                     self._active_coarse[tire_tracks[1][i]] += self._active_coarse[tire_tracks[0][i]]/2.5
                     self._active_coarse[tire_tracks[2][i]] += self._active_coarse[tire_tracks[0][i]]/2.5
-                    self._active_coarse[tire_tracks[3][i]] += self._active_coarse[tire_tracks[0][i]]/5
+                    if tire_tracks[3][i] <= len(self._active_coarse):
+                        self._active_coarse[tire_tracks[3][i]] += self._active_coarse[tire_tracks[0][i]]/5
                     self._active_coarse[tire_tracks[0][i]] -= self._active_coarse[tire_tracks[0][i]]
                 else:
-                    self._active_coarse[tire_tracks[0][i]] -= 0.001
-                    self._active_coarse[tire_tracks[1][i]] += 0.0004
-                    self._active_coarse[tire_tracks[2][i]] += 0.0004
-                    self._active_coarse[tire_tracks[3][i]] += 0.0001
+                    self._active_coarse[tire_tracks[0][i]] -= 0.01
+                    self._active_coarse[tire_tracks[1][i]] += 0.004
+                    self._active_coarse[tire_tracks[2][i]] += 0.004
+                    if tire_tracks[3][i] <= len(self._active_coarse):
+                        self._active_coarse[tire_tracks[3][i]] += 0.001
 
             #calculate pumping fluxes
             q_ps = self._u_ps*(self._surf_fine/self._surfacing)/_DAY_SEC
