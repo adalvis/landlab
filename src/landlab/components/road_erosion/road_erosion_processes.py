@@ -1,13 +1,12 @@
 """Landlab component for road erosion processes including 
 pumping, crushing, scattering (and by default, flow rerouting)
 
-Last updated: April 17, 2025
+Last updated: May 01, 2025
 
 .. codeauthor: Amanda Alvis
 """
 
 from landlab import Component
-from landlab.components import LinearDiffuser
 import random as rnd
 import numpy as np
 
@@ -119,8 +118,6 @@ class TruckPassErosion(Component):
             Fraction of fine material in the ballast
         f_bc : float
             Fraction of coarse material in the ballast
-        e : float
-
         """
 
         super().__init__(grid)
@@ -149,7 +146,7 @@ class TruckPassErosion(Component):
         self._ball_coarse = self._ballast*f_bc
         
         # Get average number of trucks per day
-        self.truck_num_avg = truck_num
+        self._truck_num_avg = truck_num
 
         self.initialize_output_fields()
         self._sed_added = grid.at_node["sediment__added"]
@@ -196,24 +193,24 @@ class TruckPassErosion(Component):
             self._left_tracks[0]])
 
         if all(val == self._center_tracks[0]):
-            self.tire_tracks = [self._center_tracks[0], self._center_tracks[1], self._out_center[0],\
+            self._tracks = [self._center_tracks[0], self._center_tracks[1], self._out_center[0],\
                 self._out_center[1], self._back_center[0], self._back_center[1]]
         elif all(val == self._right_tracks[0]):
-            self.tire_tracks = [self._right_tracks[0], self._right_tracks[1], self._out_right[0],\
+            self._tracks = [self._right_tracks[0], self._right_tracks[1], self._out_right[0],\
                 self._out_right[1], self._back_right[0], self._back_right[1]]    
         else:
-            self.tire_tracks = [self._left_tracks[0], self._left_tracks[1], self._out_left[0],\
+            self._tracks = [self._left_tracks[0], self._left_tracks[1], self._out_left[0],\
                 self._out_left[1], self._back_left[0], self._back_left[1]]
 
-        return(self.tire_tracks)
+        return(self._tracks)
 
     def run_one_step(self, centerline, half_width): 
-        active_init = self._active
-        surf_init = self._surfacing
-        ball_init = self._ballast
-        self.truck_num = np.random.poisson(self.truck_num_avg,1).item()
+        self._active_init = self._active
+        self._surf_init = self._surfacing
+        self._ball_init = self._ballast
+        self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
 
-        for _ in range(self.truck_num):
+        for _ in range(self._truck_num):
             self._tire_tracks = self.calc_tire_tracks(centerline, half_width)
 
             #scattering 
@@ -228,13 +225,13 @@ class TruckPassErosion(Component):
                     self._active_coarse[self._tire_tracks[0][i]] -= self._active_coarse[self._tire_tracks[0][i]]
                     self._active_coarse[self._tire_tracks[1][i]] -= self._active_coarse[self._tire_tracks[1][i]]
                 else:
-                    self._active_coarse[self._tire_tracks[0][i]] -= 0.01
-                    self._active_coarse[self._tire_tracks[1][i]] -= 0.01
-                    self._active_coarse[self._tire_tracks[2][i]] += 0.004*0.75
-                    self._active_coarse[self._tire_tracks[3][i]] += 0.004*0.25
+                    self._active_coarse[self._tire_tracks[0][i]] -= 0.001
+                    self._active_coarse[self._tire_tracks[1][i]] -= 0.001
+                    self._active_coarse[self._tire_tracks[2][i]] += 0.0004*0.75
+                    self._active_coarse[self._tire_tracks[3][i]] += 0.0004*0.25
                     if self._tire_tracks[5][i] <= len(self._active_coarse):
-                        self._active_coarse[self._tire_tracks[4][i]] += 0.001
-                        self._active_coarse[self._tire_tracks[5][i]] += 0.001
+                        self._active_coarse[self._tire_tracks[4][i]] += 0.0001
+                        self._active_coarse[self._tire_tracks[5][i]] += 0.0001
 
             #calculate pumping fluxes
             q_ps = self._u_ps*(self._surf_fine/self._surfacing)/_DAY_SEC
@@ -256,11 +253,13 @@ class TruckPassErosion(Component):
 
             #update fines in active layer
             for k in range(len(self._tire_tracks[0]) - 1):                
+                #determine the hiding fraction at each location
                 self._hiding_frac = [
                     self._active_coarse[self._tire_tracks[0][k]]/self._active[self._tire_tracks[0][k]],
                     self._active_coarse[self._tire_tracks[1][k]]/self._active[self._tire_tracks[1][k]]
                 ]
                 
+                #if the d95 of the active layer is greater than the depth of fines, use the hiding fraction
                 if self._d95 >= (self._active_fine[self._tire_tracks[0][k]] or self._active_fine[self._tire_tracks[1][k]]):
                     self._sed_added[self._tire_tracks[0][k]] += q_ps[self._tire_tracks[0][k]]*_DAY_SEC/ (1-self._hiding_frac[0])
                     self._sed_added[self._tire_tracks[1][k]] += q_ps[self._tire_tracks[1][k]]*_DAY_SEC/ (1-self._hiding_frac[1])  
@@ -273,12 +272,14 @@ class TruckPassErosion(Component):
 
         #update outputs
         self._ballast = self._ball_coarse + self._ball_fine
-        ball_dz = self._ballast - ball_init
+        self._ball_dz = self._ballast - self._ball_init
         self._surfacing = self._surf_coarse + self._surf_fine
-        surf_dz = self._surfacing - surf_init
+        self._surf_dz = self._surfacing - self._surf_init
         self._active = self._active_coarse + self._active_fine
-        active_dz = self._active - active_init
+        self._active_dz = self._active - self._active_init
         
-        self._elev += ball_dz + surf_dz + active_dz
+        self._elev += self._ball_dz + \
+            self._surf_dz + \
+            self._active_dz
 
-        #TODO: Do we need LinearDiffuser? #Need to update e. Not a static value.
+        #TODO:
