@@ -1,7 +1,7 @@
 """Landlab component for road erosion processes including 
 pumping, crushing, scattering (and by default, flow rerouting)
 
-Last updated: May 09, 2025
+Last updated: May 16, 2025
 
 .. codeauthor: Amanda Alvis
 """
@@ -75,6 +75,9 @@ class TruckPassErosion(Component):
     def __init__(
         self, 
         grid, 
+        centerline,
+        half_width,
+        full_tire,
         truck_num = 5,
         d95 = 0.0275,
         u_ps = 5e-7,
@@ -89,7 +92,7 @@ class TruckPassErosion(Component):
         f_bc = 0.80,
         scat_loss = 0.001,
         scat_out = 0.0004,
-        scat_back = 0.0001
+        scat_back = 0.0001,
     ):
         """Initialize TruckPassErosion.
 
@@ -99,34 +102,46 @@ class TruckPassErosion(Component):
             Landlab ModelGrid object
         truck_num : int
             Average number of trucks to pass over a road segment in a day
+        centerline : arraylike of int
+            The location of the centerline of the road surface. 
+            If using a real DEM, this should be an array that has 
+            been pre-extracted. If using a synthetic, rectangular 
+            grid, this should be the lower boundary's center node.
+        half_width : int
+            Number of nodes the truck extends to either side of 
+            the centerline of the road. This is dependent on the
+            node spacing of the grid.
+        full_tire : boolean
+            Flag to indicate whether the node spacing is that of a
+            full tire width or half tire width.
         d95 : float
-            d95 of road surfacing material
+            d95 of road surfacing material [m]
         u_ps : float
-            Pumping rate from surfacing to active layer per truck pass
+            Pumping rate from surfacing to active layer per truck pass [m/truck]
         u_pb : float
-            Pumping rate from ballast to surfacing per truck pass
+            Pumping rate from ballast to surfacing per truck pass [m/truck]
         k_cs : float
-            Crushing rate per truck pass in the surfacing 
+            Crushing rate per truck pass in the surfacing [m/truck]
         k_cb : float
-            Crushing rate per truck pass in the ballast
+            Crushing rate per truck pass in the ballast [m/truck]
         f_af : float
-            Fraction of fine material in the active layer
+            Fraction of fine material in the active layer [-]
         f_ac : float
-            Fraction of coarse material in the active layer
+            Fraction of coarse material in the active layer [-]
         f_sf : float
-            Fraction of fine material in the surfacing
+            Fraction of fine material in the surfacing [-]
         f_sc : float
-            Fraction of coarse material in the surfacing
+            Fraction of coarse material in the surfacing [-]
         f_bf : float
-            Fraction of fine material in the ballast
+            Fraction of fine material in the ballast [-]
         f_bc : float
-            Fraction of coarse material in the ballast
+            Fraction of coarse material in the ballast [-]
         scat_loss : float
-            Total amount of coarse material being scattered in the active layer
+            Total amount of coarse material being scattered in the active layer [m]
         scat_out : float
-            Amount of coarse material scattered to either side of the truck tire
+            Amount of coarse material scattered to either side of the truck tire [m]
         scat_back : float
-            Amount of coarse material scattered immediately behind the truck tire
+            Amount of coarse material scattered immediately behind the truck tire [m]
         """
 
         super().__init__(grid)
@@ -141,13 +156,16 @@ class TruckPassErosion(Component):
         self._scat_loss = scat_loss
         self._scat_out = scat_out
         self._scat_back = scat_back
+        self._centerline = centerline
+        self._half_width = half_width
+        self._full_tire = full_tire
         
         # Get elevation field
         self._elev = grid.at_node['topographic__elevation']
 
         # Get layers for sediment depths
         self._active = grid.at_node['active__depth']
-        self._surfacing = grid.at_node['surfacing__depth'] #representative node for 3 nodes across?
+        self._surfacing = grid.at_node['surfacing__depth']
         self._ballast = grid.at_node['ballast__depth']
 
         self._active_fine = self._active*f_af
@@ -169,25 +187,25 @@ class TruckPassErosion(Component):
         each node"""
         return self._sed_added
 
-    def calc_tire_tracks(self, centerline, half_width, full_tire):
+    def calc_tire_tracks(self):
         #grab center location of road if given a node, else use the array given
-        if np.ndim(centerline) == 0:
-            self._center = self._grid.nodes[:, centerline]
+        if np.ndim(self._centerline) == 0:
+            self._center = self._grid.nodes[:, self._centerline]
         else:
-            self._center = centerline
+            self._center = self._centerline
 
-        if full_tire == False:
+        if self._full_tire == False:
             self._center_tracks = [
-                np.concatenate((self._center-half_width-2, self._center-half_width-1,\
-                self._center-half_width, self._center-half_width+1)),\
-                np.concatenate((self._center+half_width-1, self._center+half_width,\
-                self._center+half_width+1, self._center+half_width+2))
+                np.concatenate((self._center-self._half_width-2, self._center-self._half_width-1,\
+                self._center-self._half_width, self._center-self._half_width+1)),\
+                np.concatenate((self._center+self._half_width-1, self._center+self._half_width,\
+                self._center+self._half_width+1, self._center+self._half_width+2))
                 ]
             self._out_center = [
-                np.concatenate((self._center-half_width-3, self._center-half_width+2,\
-                self._center+half_width-2,self._center+half_width+3)),\
-                np.concatenate((self._center-half_width-4, self._center-half_width+3,\
-                self._center+half_width-3,self._center+half_width+4)),\
+                np.concatenate((self._center-self._half_width-3, self._center-self._half_width+2,\
+                self._center+self._half_width-2,self._center+self._half_width+3)),\
+                np.concatenate((self._center-self._half_width-4, self._center-self._half_width+3,\
+                self._center+self._half_width-3,self._center+self._half_width+4)),\
                 ]
             self._back_center = [
                 self._center_tracks[0]+ self._grid.number_of_node_columns, 
@@ -214,9 +232,9 @@ class TruckPassErosion(Component):
             else:
                 self._tracks = [self._left_tracks[0], self._left_tracks[1], self._out_left[0],\
                     self._out_left[1], self._back_left[0], self._back_left[1]]
-        elif full_tire == True:
-            self._right_tracks = np.concatenate((self._center-half_width+1,self._center-half_width,\
-                self._center+half_width, self._center+half_width+1))
+        elif self._full_tire == True:
+            self._right_tracks = np.concatenate((self._center-self._half_width+1,self._center-self._half_width,\
+                self._center+self._half_width, self._center+self._half_width+1))
             self._out_right = [self._right_tracks-1, self._right_tracks+1]
             self._back_right = self._right_tracks+\
                 self._grid.number_of_node_columns
@@ -239,16 +257,16 @@ class TruckPassErosion(Component):
 
         return(self._tracks)
 
-    def run_one_step(self, centerline, half_width, full_tire): 
+    def run_one_step(self):
         self._active_init = self._active
         self._surf_init = self._surfacing
         self._ball_init = self._ballast
         self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
 
         for _ in range(self._truck_num):
-            self._tire_tracks = self.calc_tire_tracks(centerline, half_width, full_tire)
+            self._tire_tracks = self.calc_tire_tracks()
 
-            if full_tire == False:
+            if self._full_tire == False:
                 #scattering 
                 for i in range(len(self._tire_tracks[0]) - 1):
                     #Set bottom boundary of active layer
@@ -317,7 +335,7 @@ class TruckPassErosion(Component):
                     self._active_fine[self._tire_tracks[0][k]] += self._sed_added[self._tire_tracks[0][k]]
                     self._active_fine[self._tire_tracks[1][k]] += self._sed_added[self._tire_tracks[1][k]]
             
-            elif full_tire == True:
+            elif self._full_tire == True:
                 for i in range(len(self._tire_tracks[0]) - 1):
                     if (self._active_coarse[self._tire_tracks[0][i]]) <= self._scat_loss:     
                         self._active_coarse[self._tire_tracks[1][i]] += \
@@ -368,12 +386,15 @@ class TruckPassErosion(Component):
                     self._active_fine[self._tire_tracks[0][k]] += self._sed_added[self._tire_tracks[0][k]]
 
         #update outputs
-        self._ballast = self._ball_coarse + self._ball_fine
-        self._ball_dz = self._ballast - self._ball_init
-        self._surfacing = self._surf_coarse + self._surf_fine
-        self._surf_dz = self._surfacing - self._surf_init
-        self._active = self._active_coarse + self._active_fine
-        self._active_dz = self._active - self._active_init
+        self._ball = self._ball_coarse + self._ball_fine
+        self._ball_dz = self._ball - self._ball_init
+        self._ballast += self._ball_dz
+        self._surf = self._surf_coarse + self._surf_fine
+        self._surf_dz = self._surf - self._surf_init
+        self._surfacing += self._surf_dz
+        self._act = self._active_coarse + self._active_fine
+        self._active_dz = self._act - self._active_init
+        self._active += self._active_dz
         
         self._elev += self._ball_dz + \
             self._surf_dz + \
