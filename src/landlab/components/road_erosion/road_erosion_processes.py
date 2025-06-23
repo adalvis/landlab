@@ -88,8 +88,7 @@ class TruckPassErosion(Component):
         f_sc = 0.725,
         f_bf = 0.20,
         f_bc = 0.80,
-        scat_loss = 0.001,
-        scat_out = 0.0005,
+        scat_loss = 8e-5,
     ):
         """Initialize TruckPassErosion.
 
@@ -133,8 +132,6 @@ class TruckPassErosion(Component):
             Fraction of coarse material in the ballast [-]
         scat_loss : float
             Total amount of coarse material being scattered in the active layer [m]
-        scat_out : float
-            Amount of coarse material scattered to either side of the truck tire [m]
         """
 
         super().__init__(grid)
@@ -146,7 +143,6 @@ class TruckPassErosion(Component):
         self._k_cs = k_cs
         self._k_cb = k_cb
         self._scat_loss = scat_loss
-        self._scat_out = scat_out
         self._centerline = centerline
         self._half_width = half_width
         self._full_tire = full_tire
@@ -400,17 +396,17 @@ class TruckPassErosion(Component):
                     self._q_cb = self._k_cb*(self._ball_coarse/self._ballast)
 
                     #update surfacing
-                    self._surf_coarse[self.tire_tracks[0]] -= self._q_cs[self.tire_tracks[0]]
-                    self._surf_fine[self.tire_tracks[0]] += self._q_cs[self.tire_tracks[0]] - \
-                        self._q_ps[self.tire_tracks[0]] + self._q_pb[self.tire_tracks[0]]
+                    self._surf_coarse[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
+                    self._surf_fine[self.tire_tracks[0:2]] += self._q_cs[self.tire_tracks[0:2]] - \
+                        self._q_ps[self.tire_tracks[0:2]] + self._q_pb[self.tire_tracks[0:2]]
 
                     #update ballast
-                    self._ball_coarse[self.tire_tracks[0]] -= self._q_cb[self.tire_tracks[0]]
-                    self._ball_fine[self.tire_tracks[0]] += self._q_cb[self.tire_tracks[0]] - \
-                        self._q_pb[self.tire_tracks[0]]
+                    self._ball_coarse[self.tire_tracks[0:2]] -= self._q_cb[self.tire_tracks[0:2]]
+                    self._ball_fine[self.tire_tracks[0:2]] += self._q_cb[self.tire_tracks[0:2]] - \
+                        self._q_pb[self.tire_tracks[0:2]]
 
-                    self._sed_added[self.tire_tracks[0]] += self._q_ps[self.tire_tracks[0]]
-                    self._active_fine[self.tire_tracks[0]] += self._q_ps[self.tire_tracks[0]]
+                    self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
+                    self._active_fine[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
 
         #update outputs
         self._ball_dz =  (self._ball_coarse + self._ball_fine) - self._ball_init 
