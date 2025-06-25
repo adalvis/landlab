@@ -259,7 +259,7 @@ class TruckPassErosion(Component):
             pass
         else:
             for _ in range(self._truck_num):
-                self.tire_tracks = self.calc_tire_tracks() #is there a way to determine tire_tracks and get the # of truck passes per config?
+                self.tire_tracks = self.calc_tire_tracks() 
 
                 if self._full_tire == False:
 
@@ -376,16 +376,6 @@ class TruckPassErosion(Component):
                             self._active_coarse[self.tire_tracks[1][i]] -= self._scat_loss
                             self._active_coarse[self.tire_tracks[2][i]] += self._scat_loss
                             self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss
-
-                        # if (self._active_coarse[self.tire_tracks[0][i]] <= self._scat_loss) and\
-                        #     (self._active_coarse[self.tire_tracks[1][i]]):     
-                        #     self._active_coarse[self.tire_tracks[1][i]] += \
-                        #         self._active_coarse[self.tire_tracks[0][i]]/2
-                        #     self._active_coarse[self.tire_tracks[0][i]] -= \
-                        #         self._active_coarse[self.tire_tracks[0][i]]
-                        # else:
-                        #     self._active_coarse[self.tire_tracks[0][i]] -= self._scat_loss
-                        #     self._active_coarse[self.tire_tracks[1][i]] += self._scat_loss
 
                     #calculate pumping fluxes
                     self._q_ps = self._u_ps*(self._surf_fine/self._surfacing)
