@@ -142,6 +142,14 @@ class TruckPassErosion(Component):
         self._u_pb = u_pb
         self._k_cs = k_cs
         self._k_cb = k_cb
+
+        self._f_af = f_af
+        self._f_ac = f_ac
+        self._f_sf = f_sf
+        self._f_sc = f_sc
+        self._f_bf = f_bf
+        self._f_bc = f_bc
+
         self._scat_loss = scat_loss
         self._centerline = centerline
         self._half_width = half_width
@@ -158,12 +166,12 @@ class TruckPassErosion(Component):
         self._surfacing = grid.at_node['surfacing__depth']
         self._ballast = grid.at_node['ballast__depth']
 
-        self._active_fine = self._active*f_af
-        self._active_coarse = self._active*f_ac
-        self._surf_fine = self._surfacing*f_sf
-        self._surf_coarse = self._surfacing*f_sc
-        self._ball_fine = self._ballast*f_bf
-        self._ball_coarse = self._ballast*f_bc
+        self._active_fine = self._active*self._f_af
+        self._active_coarse = self._active*self._f_ac
+        self._surf_fine = self._surfacing*self._f_sf
+        self._surf_coarse = self._surfacing*self._f_sc
+        self._ball_fine = self._ballast*self._f_bf
+        self._ball_coarse = self._ballast*self._f_bc
 
         # Get average number of trucks per day
         self._truck_num_avg = truck_num
