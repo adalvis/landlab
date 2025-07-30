@@ -53,6 +53,22 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of fine sediment added to active layer",
         },
+        "active__fines": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of fine sediment added to active layer",
+        },
+        "active__coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of fine sediment added to active layer",
+        },
         "surfacing__depth": {
             "dtype": float,
             "intent": "inout",
@@ -162,22 +178,30 @@ class TruckPassErosion(Component):
         self._ballast_elev = grid.at_node['ballast__elev']
 
         # Get layers for sediment depths
-        self._active = grid.at_node['active__depth']
-        self._surfacing = grid.at_node['surfacing__depth']
-        self._ballast = grid.at_node['ballast__depth']
-
-        self._active_fine = self._active*self._f_af
-        self._active_coarse = self._active*self._f_ac
-        self._surf_fine = self._surfacing*self._f_sf
-        self._surf_coarse = self._surfacing*self._f_sc
-        self._ball_fine = self._ballast*self._f_bf
-        self._ball_coarse = self._ballast*self._f_bc
+        self._active = grid.at_node["active__depth"]
+        # self._active_fine = grid.at_node["active__fines"]
+        # self._active_coarse = grid.at_node["active__coarse"]
+        self._surfacing = grid.at_node["surfacing__depth"]
+        # self._surf_fine = grid.at_node["surfacing__fines"]
+        # self._surf_coarse = grid.at_node["surfacing__coarse"]
+        self._ballast = grid.at_node["ballast__depth"]
+        # self._ball_fine = grid.at_node["ballast__fines"]
+        # self._ball_coarse = grid.at_node["ballast__coarse"]
 
         # Get average number of trucks per day
         self._truck_num_avg = truck_num
 
         self.initialize_output_fields()
         self._sed_added = grid.at_node["sediment__added"]
+        
+        
+        
+        self._active_fine = self._active*self._f_af
+        self._active_coarse = self._active*self._f_ac
+        self._surf_fine = self._surfacing*self._f_sf
+        self._surf_coarse = self._surfacing*self._f_sc
+        self._ball_fine = self._ballast*self._f_bf
+        self._ball_coarse = self._ballast*self._f_bc
 	
     @property
     def sed_added(self):
