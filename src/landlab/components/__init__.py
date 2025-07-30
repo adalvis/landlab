@@ -64,6 +64,7 @@ from .overland_flow import KinwaveOverlandFlowModel
 from .overland_flow import LinearDiffusionOverlandFlowRouter
 from .overland_flow import OverlandFlow
 from .overland_flow import OverlandFlowBates
+from .overland_flow_transporter import OverlandFlowTransporter
 from .pet import PotentialEvapotranspiration
 from .plant_competition_ca import VegCA
 from .potentiality_flowrouting import PotentialityFlowRouter
