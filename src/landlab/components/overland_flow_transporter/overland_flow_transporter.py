@@ -15,7 +15,7 @@ class OverlandFlowTransporter(Component):
             "dtype": float,
             "intent": "out",
             "optional": False,
-            "units": "m**3/s",
+            "units": "m**3/time",
             "mapping": "node",
             "doc": "Volumetric incoming streamwise sediment transport rate",
         },
@@ -23,7 +23,7 @@ class OverlandFlowTransporter(Component):
             "dtype": float,
             "intent": "out",
             "optional": False,
-            "units": "m**3/s",
+            "units": "m**3/time",
             "mapping": "node",
             "doc": "Volumetric outgoing streamwise sediment transport rate",
         },
@@ -39,7 +39,7 @@ class OverlandFlowTransporter(Component):
             "dtype": float,
             "intent": "out",
             "optional": False,
-            "units": "m/s",
+            "units": "m/time",
             "mapping": "node",
             "doc": "Time rate of change of sediment thickness",
         },
@@ -47,7 +47,7 @@ class OverlandFlowTransporter(Component):
             "dtype": float,
             "intent": "in",
             "optional": False,
-            "units": "m**3/s",
+            "units": "m**3/time",
             "mapping": "node",
             "doc": "Volumetric discharge of surface water",
         },
@@ -139,7 +139,6 @@ class OverlandFlowTransporter(Component):
     def __init__(
         self,
         grid,
-        # ditch_treatment,
         d95=0.020,
         n_c=0.4,
         rho_w=1000,
@@ -153,7 +152,6 @@ class OverlandFlowTransporter(Component):
         super().__init__(grid)
 
         # Parameters
-        # self._ditch_treatment = ditch_treatment
         self._d95 = d95
         self._n_c = n_c
         self._rho_w = rho_w
@@ -168,8 +166,8 @@ class OverlandFlowTransporter(Component):
         self._slope = grid.at_node["topographic__steepest_slope"]
         self._receiver_node = grid.at_node["flow__receiver_node"]
         self._active_depth = grid.at_node["active__depth"]
-        # self._active_fines = grid.at_node["active__fines"]
-        # self._active_coarse = grid.at_node["active__coarse"]
+        self._active_fines = grid.at_node["active__fines"]
+        self._active_coarse = grid.at_node["active__coarse"]
         self._sed_added = grid.at_node["sediment__added"]
         self._road_flag = grid.at_node["flag"]
         
@@ -178,7 +176,6 @@ class OverlandFlowTransporter(Component):
         self._n_f = grid.at_node["grain__roughness"]
         self._n_t = grid.at_node["total__roughness"]
         self._water_depth = grid.at_node["water__depth"]
-        # self._channel_depth = grid.at_node["channel_depth"]
         self._sediment_influx = grid.at_node["sediment__volume_influx"]
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
         self._dzdt = grid.at_node["sediment__rate_of_change"]
@@ -191,28 +188,10 @@ class OverlandFlowTransporter(Component):
                     self._n_f[i] = 0.0026*self._unit_discharge[i]**(-0.274)
                     if self._active_depth[i] <= self._d95: #need to fix to be active_coarse and active_fines, but how do I update those??
                         self._n_t[i] = self._n_c + (self._active_depth[i]/self._d95)*(self._n_f[i] - self._n_c)
-                        self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)*(self._active_depth[i]/self._d95)
+                        self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)#*(self._active_depth[i]/self._d95)
                     else:
                         self._n_t[i] = self._n_f[i]
                         self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
-                # elif self._road_flag[i] == 0:
-                #     self._n_f[i] = 0.05
-                #     match self._ditch_treatment:
-                #         case "armor":
-                #             self._n_t[i] = 0.1
-                #         case "rock":
-                #             self._n_t[i] = 0.25
-                #         case "sp_wattles":
-                #             self._n_t[i] = 0.4
-                #         case "sp_wattles_late":
-                #             self._n_t[i] = 0.6
-                #         case "grass":
-                #             self._n_t[i] = 0.6
-                #         case "de_wattles":
-                #             self._n_t[i] = 0.725
-                #         case _:
-                #             self._n_t[i] = 0.05
-                #     self._f_s[i] = (self._n_f[i]/self._n_t[i])**(24/13)
             else:
                 self._n_f[i] = 0
                 self._n_t[i] = 0
@@ -240,7 +219,7 @@ class OverlandFlowTransporter(Component):
                     ((10**(-4.348))
                     / (self._rho_s*((self._d50)**(0.811))))
                     * (self._shear_stress[i]-self._tau_c)**(2.457)
-                )
+                ) * self.grid.dx
             else:
                 self._sediment_outflux[i] = 0.0
 
@@ -250,11 +229,11 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
 
-        # for i in range(len(self._sediment_outflux)):
-        #     self._sediment_outflux[i] = min(
-        #         self._sediment_outflux[i], ((self._active_fines[i])
-        #         * self.grid.area_of_cell[self.grid.cell_at_node[i]])
-        #         )
+        for i in range(len(self._sediment_outflux)):
+            self._sediment_outflux[i] = min(
+                self._sediment_outflux[i], ((self._active_fines[i])
+                * self.grid.area_of_cell[self.grid.cell_at_node[i]])
+                )
         self._sediment_influx[:] = 0.0
         for c in cores:  # send sediment downstream
             r = self._receiver_node[c]
@@ -263,20 +242,16 @@ class OverlandFlowTransporter(Component):
             self._sediment_influx[cores] - self._sediment_outflux[cores]
         ) / self.grid.area_of_cell[self.grid.cell_at_node[cores]]
 
-    # def calc_channel_depth(self):
-    #     self.calc_roughness()
-    #     for i in self.grid.nodes.reshape(np.size(self.grid.nodes))[self._road_flag==0]:
-    #         if self._unit_discharge[i]
-                        
-    #         self._water_depth[i] = ((self._n_t[i]*self._unit_discharge[i])/\
-    #             (np.sqrt(6*self._slope[i]/0.718)))**(6/13) #use overall channel S
-
-    # def calc_channel_shear_stress(self):
-
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
+        self._active_fines_init = self._active_fines.copy()
+
         self.calc_overland_sediment_rate_of_change()
-        self._elev += self._dzdt * dt
-        # self._active_fines += self._dzdt*dt
-        # self._active_depth
+        self._elev += self._dzdt * dt 
+        self._active_fines += self._dzdt*dt
+        print(self._active_fines_init == self._active_fines)
+        self._active_dz = (self._active_fines_init-self._active_fines)
+        print(self._active_dz)
+        self._active_depth += self._active_dz
+        
