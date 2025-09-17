@@ -85,23 +85,6 @@ class OverlandFlowTransporter(Component):
             "doc": "depth of active layer of sediment of the road cross\
                 section",
         },
-        "active__coarse": {
-            "dtype": float,
-            "intent": "inout",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of active layer of sediment of the road cross\
-                section",
-        },
-        "sediment__added": {
-            "dtype": float,
-            "intent": "in",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to active layer",
-        },
         "grain__roughness": {
             "dtype": float,
             "intent": "out",
@@ -139,8 +122,7 @@ class OverlandFlowTransporter(Component):
     def __init__(
         self,
         grid,
-        d95=0.020,
-        n_c=0.4,
+        n_c=0.1,
         rho_w=1000,
         rho_s=2650,
         g=9.81,
@@ -152,7 +134,6 @@ class OverlandFlowTransporter(Component):
         super().__init__(grid)
 
         # Parameters
-        self._d95 = d95
         self._n_c = n_c
         self._rho_w = rho_w
         self._rho_s = rho_s
@@ -167,8 +148,6 @@ class OverlandFlowTransporter(Component):
         self._receiver_node = grid.at_node["flow__receiver_node"]
         self._active_depth = grid.at_node["active__depth"]
         self._active_fines = grid.at_node["active__fines"]
-        self._active_coarse = grid.at_node["active__coarse"]
-        self._sed_added = grid.at_node["sediment__added"]
         self._road_flag = grid.at_node["flag"]
         
         super().initialize_output_fields()
@@ -185,10 +164,10 @@ class OverlandFlowTransporter(Component):
         for i in range(len(self._unit_discharge)):
             if self._unit_discharge[i] > 0:
                 if self._road_flag[i] == 1:
-                    self._n_f[i] = 0.0026*self._unit_discharge[i]**(-0.274)
-                    if self._active_depth[i] <= self._d95: #need to fix to be active_coarse and active_fines, but how do I update those??
-                        self._n_t[i] = self._n_c + (self._active_depth[i]/self._d95)*(self._n_f[i] - self._n_c)
-                        self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)#*(self._active_depth[i]/self._d95)
+                    self._n_f[i] = 0.05
+                    if self._active_fines[i] <= self._active_depth[i]:
+                        self._n_t[i] = self._n_c + (self._active_fines[i]/self._active_depth[i])*(self._n_f[i] - self._n_c)
+                        self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
                     else:
                         self._n_t[i] = self._n_f[i]
                         self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
@@ -250,8 +229,6 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_sediment_rate_of_change()
         self._elev += self._dzdt * dt 
         self._active_fines += self._dzdt*dt
-        print(self._active_fines_init == self._active_fines)
-        self._active_dz = (self._active_fines_init-self._active_fines)
-        print(self._active_dz)
+        self._active_dz = (self._active_fines-self._active_fines_init)
         self._active_depth += self._active_dz
         
