@@ -126,12 +126,12 @@ class TruckPassErosion(Component):
         half_width,
         full_tire,
         truck_num = 5,
-        u_ps = 5e-7,
-        u_pb = 1e-7,
-        k_cs = 1e-7,
-        k_cb = 1e-7,
-        f_af = 0.25,
-        f_ac = 0.75,
+        u_ps = 6.3e-6, #(10.3g/m2)
+        u_pb = 2.3e-6,
+        k_cs = 6e-7,
+        k_cb = 2e-7,
+        f_af = 0.50,
+        f_ac = 0.50,
         f_sf = 0.275,
         f_sc = 0.725,
         f_bf = 0.20,
@@ -232,8 +232,7 @@ class TruckPassErosion(Component):
         self._surf_fine += self._surfacing*self._f_sf
         self._surf_coarse += self._surfacing*self._f_sc
         self._ball_fine += self._ballast*self._f_bf
-        self._ball_coarse += self._ballast*self._f_bc
-	
+        self._ball_coarse += self._ballast*self._f_bc	
 
     @property
     def sed_added(self):
@@ -379,8 +378,8 @@ class TruckPassErosion(Component):
 
 
                     #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surf_fine/self._surfacing)
-                    self._q_pb = self._u_pb*(self._ball_fine/self._ballast)
+                    self._q_ps = self._u_ps*(self._surfacing/self._surfacing)
+                    self._q_pb = self._u_pb*(self._ballast/self._ballast)
 
                     #calculate crushing fluxes
                     self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing)
