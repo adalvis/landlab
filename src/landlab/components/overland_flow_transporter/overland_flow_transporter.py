@@ -232,11 +232,13 @@ class OverlandFlowTransporter(Component):
                 self._water_depth[i]=0
 
     def calc_overland_shear_stress(self):
+        """Calculate and return overland flow partitioned shear stress.
+        """
         self.calc_overland_depth()
         self._shear_stress = self._rho_w*self._g*self._water_depth*self._slope*self._f_s
 
     def calc_overland_transport_capacity(self):
-        """Calculate and return bed-load transport capacity.
+        """Calculate and return transport capacity.
         """
         self.calc_overland_shear_stress()
 
