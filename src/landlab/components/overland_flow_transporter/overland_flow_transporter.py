@@ -1,9 +1,25 @@
+"""Landlab component for calculating shallow overland flow
+sediment transport using Govers' equation (1992)
+
+Last updated:  September 19, 2025
+
+.. codeauthor: Amanda Alvis
+"""
+
 from landlab import Component
 import numpy as np
 
 class OverlandFlowTransporter(Component):
-    """
+    """Erodes a surface with shallow overland flow using physics-based formulations 
+    for entrainment and transport that can directly use sediment size distribution 
+    and surface roughness. The sediment transport rate is calculated using Govers' 
+    equation (1992) with shear stress partitioning.
 
+    References:
+    ----------
+    Govers, G. (1992). Evaluation of transporting capacity formulae for overland 
+    flow. In Overland Flow: Hydraulics and Erosion Mechanics (pp. 243–273). New 
+    York: Chapman and Hall.
     """
 
     _name = "OverlandFlowTransporter"
@@ -73,7 +89,7 @@ class OverlandFlowTransporter(Component):
             "optional": False,
             "units": "m",
             "mapping": "node",
-            "doc": "depth of active layer of sediment of the road cross\
+            "doc": "Depth of active layer of sediment of the road cross\
                 section",
         },
         "active__fines": {
@@ -82,8 +98,15 @@ class OverlandFlowTransporter(Component):
             "optional": False,
             "units": "m",
             "mapping": "node",
-            "doc": "depth of active layer of sediment of the road cross\
-                section",
+            "doc": "Depth of fine sediment in the active layer",
+        },
+        "active__coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "Depth of coarse sediment in the active layer",
         },
         "grain__roughness": {
             "dtype": float,
@@ -99,7 +122,7 @@ class OverlandFlowTransporter(Component):
             "optional": False,
             "units": "-",
             "mapping": "node",
-            "doc": "total Manning's roughness",
+            "doc": "Total Manning's roughness",
         },
         "shear_stress__partitioning": {
             "dtype": float,
@@ -107,7 +130,7 @@ class OverlandFlowTransporter(Component):
             "optional": False,
             "units": "-",
             "mapping": "node",
-            "doc": "shear stress partitioning ratio",
+            "doc": "Shear stress partitioning ratio",
         },
         "water__depth": {
             "dtype": float,
@@ -115,7 +138,7 @@ class OverlandFlowTransporter(Component):
             "optional": False,
             "units": "m",
             "mapping": "node",
-            "doc": "shear stress partitioning ratio",
+            "doc": "Depth of water",
         },
     }
 
@@ -129,7 +152,25 @@ class OverlandFlowTransporter(Component):
         d50=1.8e-5,
         tau_c=0.052,
     ):
-        """Initialize OverlandFlowTransporter."""
+        """Initialize OverlandFlowTransporter.
+        
+        Parameters
+        ----------
+        grid : ModelGrid
+            Landlab ModelGrid object
+        n_c : float
+            The Manning's roughness of the surface's coarse material
+        rho_w : int
+            The density of water [kg/m^3]
+        rho_s : int
+            The density of sediment [kg/m^3]
+        g : float
+            Acceleration of gravity [m/s^2]
+        d50 : float
+            The median grain size (d50) of the surface's material [m]
+        tau_c : float
+            The critical shear stress required to move sediment [Pa]
+        """
 
         super().__init__(grid)
 
@@ -148,6 +189,7 @@ class OverlandFlowTransporter(Component):
         self._receiver_node = grid.at_node["flow__receiver_node"]
         self._active_depth = grid.at_node["active__depth"]
         self._active_fines = grid.at_node["active__fines"]
+        self._active_coarse = grid.at_node["active__coarse"]
         self._road_flag = grid.at_node["flag"]
         
         super().initialize_output_fields()
@@ -160,12 +202,15 @@ class OverlandFlowTransporter(Component):
         self._dzdt = grid.at_node["sediment__rate_of_change"]
 
     def calc_overland_roughness(self):
+        """Calculate and return overland flow surface roughness and 
+        shear stress partitioning ratio.
+        """
         self._unit_discharge = self._discharge/self.grid.dx
         for i in range(len(self._unit_discharge)):
             if self._unit_discharge[i] > 0:
                 if self._road_flag[i] == 1:
                     self._n_f[i] = 0.05
-                    if self._active_fines[i] <= self._active_depth[i]:
+                    if self._active_fines[i] <= self._active_coarse[i]:
                         self._n_t[i] = self._n_c + (self._active_fines[i]/self._active_depth[i])*(self._n_f[i] - self._n_c)
                         self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
                     else:
@@ -176,6 +221,8 @@ class OverlandFlowTransporter(Component):
                 self._n_t[i] = 0
 
     def calc_overland_depth(self):
+        """Calculate and return overland flow water depth.
+        """
         self.calc_overland_roughness()
         for i in range(len(self._unit_discharge)):
             if self._unit_discharge[i] > 0:
@@ -192,6 +239,7 @@ class OverlandFlowTransporter(Component):
         """Calculate and return bed-load transport capacity.
         """
         self.calc_overland_shear_stress()
+
         for i in range(len(self._shear_stress)):
             if self._shear_stress[i] >= self._tau_c:
                 self._sediment_outflux[i] = (
@@ -208,11 +256,13 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
 
+        # Determine whether system is transport- or energy-limited.
         for i in range(len(self._sediment_outflux)):
             self._sediment_outflux[i] = min(
                 self._sediment_outflux[i], ((self._active_fines[i])
                 * self.grid.area_of_cell[self.grid.cell_at_node[i]])
                 )
+        
         self._sediment_influx[:] = 0.0
         for c in cores:  # send sediment downstream
             r = self._receiver_node[c]
@@ -227,6 +277,7 @@ class OverlandFlowTransporter(Component):
         self._active_fines_init = self._active_fines.copy()
 
         self.calc_overland_sediment_rate_of_change()
+        
         self._elev += self._dzdt * dt 
         self._active_fines += self._dzdt*dt
         self._active_dz = (self._active_fines-self._active_fines_init)
