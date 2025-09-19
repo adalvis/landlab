@@ -1,7 +1,7 @@
 """Landlab component for road erosion processes including 
 pumping, crushing, scattering (and by default, flow rerouting)
 
-Last updated: May 16, 2025
+Last updated: September 18, 2025
 
 .. codeauthor: Amanda Alvis
 """
@@ -37,6 +37,22 @@ class TruckPassErosion(Component):
             "doc": "depth of active layer of sediment of the road cross\
                 section",
         },
+        "active__fines": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of fine sediment in the active layer",
+        },
+        "active__coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of coarse sediment in the active layer",
+        },
         "ballast__depth": {
             "dtype": float,
             "intent": "inout",
@@ -44,6 +60,22 @@ class TruckPassErosion(Component):
             "units": "m",
             "mapping": "node",
             "doc": "depth of ballast layer of the road cross section",
+        },
+        "ballast__fines": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of fine sediment in the ballast layer",
+        },
+        "ballast__coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of coarse sediment in the ballast layer",
         },
         "sediment__added": {
             "dtype": float,
@@ -53,54 +85,6 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of fine sediment added to active layer",
         },
-        "active__fines": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to active layer",
-        },
-        "active__coarse": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to active layer",
-        },
-        "surfacing__fines": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to surfacing layer",
-        },
-        "surfacing__coarse": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to surfacing layer",
-        },
-        "ballast__fines": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to ballast layer",
-        },
-        "ballast__coarse": {
-            "dtype": float,
-            "intent": "out",
-            "optional": False,
-            "units": "m",
-            "mapping": "node",
-            "doc": "depth of fine sediment added to ballast layer",
-        },
         "surfacing__depth": {
             "dtype": float,
             "intent": "inout",
@@ -108,6 +92,22 @@ class TruckPassErosion(Component):
             "units": "m",
             "mapping": "node",
             "doc": "depth of surfacing layer of the road cross section",
+        },
+        "surfacing__fines": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of fine sediment in the surfacing layer",
+        },
+        "surfacing__coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of coarse sediment in the surfacing layer",
         },
         "topographic__elevation": {
             "dtype": float,
@@ -119,24 +119,24 @@ class TruckPassErosion(Component):
         },
     }
     
-    def __init__( #add layer depths as user inputs so the only information required on the DEM is the topographic elevation
+    def __init__(
         self, 
         grid, 
         centerline,
         half_width,
         full_tire,
         truck_num = 5,
-        u_ps = 6.3e-6, #(10.3g/m2)
-        u_pb = 2.3e-6,
-        k_cs = 6e-7,
-        k_cb = 2e-7,
+        u_ps = 6.3e-6, #(10.3g/m2) converted to depth
+        u_pb = 2.3e-6, #current best guess
+        k_cs = 6e-7, #current best guess
+        k_cb = 2e-7, #current best guess
         f_af = 0.50,
         f_ac = 0.50,
         f_sf = 0.275,
         f_sc = 0.725,
         f_bf = 0.20,
         f_bc = 0.80,
-        scat_loss = 8e-5,
+        scat_loss = 8e-5, #current best guess
     ):
         """Initialize TruckPassErosion.
 
@@ -144,8 +144,6 @@ class TruckPassErosion(Component):
         ----------
         grid : ModelGrid
             Landlab ModelGrid object
-        truck_num : int
-            Average number of trucks to pass over a road segment in a day
         centerline : arraylike of int
             The location of the centerline of the road surface. 
             If using a real DEM, this should be an array that has 
@@ -158,6 +156,8 @@ class TruckPassErosion(Component):
         full_tire : boolean
             Flag to indicate whether the node spacing is that of a
             full tire width or half tire width.
+        truck_num : int
+            Average number of trucks to pass over a road segment in a day
         u_ps : float
             Pumping rate from surfacing to active layer per truck pass [m/truck]
         u_pb : float
@@ -179,7 +179,8 @@ class TruckPassErosion(Component):
         f_bc : float
             Fraction of coarse material in the ballast [-]
         scat_loss : float
-            Total amount of coarse material being scattered in the active layer [m]
+            Total amount of coarse material being scattered in the active layer
+            per truck pass [m]
         """
 
         super().__init__(grid)
@@ -226,7 +227,7 @@ class TruckPassErosion(Component):
         self._ball_fine = grid.at_node['ballast__fines']
         self._ball_coarse = grid.at_node['ballast__coarse']
         
-        
+        # Initialize each of the fraction depths
         self._active_fine += self._active*self._f_af
         self._active_coarse += self._active*self._f_ac
         self._surf_fine += self._surfacing*self._f_sf
@@ -241,7 +242,7 @@ class TruckPassErosion(Component):
         return self._sed_added
 
     def calc_tire_tracks(self):
-        #grab center location of road if given a node, else use the array given
+        #Grab center location of road if given a node, else use the array given
         if np.ndim(self._centerline) == 0:
             self._center = self._grid.nodes[:, self._centerline]
         else:
@@ -441,8 +442,8 @@ class TruckPassErosion(Component):
                             self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss
 
                     #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surf_fine/self._surfacing)
-                    self._q_pb = self._u_pb*(self._ball_fine/self._ballast)
+                    self._q_ps = self._u_ps*(self._surfacing/self._surfacing)
+                    self._q_pb = self._u_pb*(self._ballast/self._ballast)
 
                     #calculate crushing fluxes
                     self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing)
