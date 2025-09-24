@@ -280,8 +280,8 @@ class OverlandFlowTransporter(Component):
 
         self.calc_overland_sediment_rate_of_change()
         
-        self._elev += self._dzdt * dt 
-        self._active_fines += self._dzdt*dt
+        self._elev += self._dzdt * dt * 86400 
+        self._active_fines += self._dzdt*dt*86400
         self._active_dz = (self._active_fines-self._active_fines_init)
         self._active_depth += self._active_dz
         
