@@ -193,7 +193,7 @@ class TruckPassErosion(Component):
         self._k_cs = k_cs
         self._k_cb = k_cb
 
-        self._f_af = f_af
+        self._f_af = f_af 
         self._f_ac = f_ac
         self._f_sf = f_sf
         self._f_sc = f_sc

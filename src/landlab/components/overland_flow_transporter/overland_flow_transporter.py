@@ -146,12 +146,14 @@ class OverlandFlowTransporter(Component):
         self,
         grid,
         n_c=0.1,
+        n_f=0.015,
         rho_w=1000,
         rho_s=2650,
         g=9.81,
         d50=2e-4, # this is so small, originally d50 = 1.8e-5
-        d95=0.2e-3,
         tau_c=0.052,
+        Sa_ini=0.01,
+        porosity = 0.35
     ):
         """Initialize OverlandFlowTransporter.
         
@@ -161,6 +163,8 @@ class OverlandFlowTransporter(Component):
             Landlab ModelGrid object
         n_c : float
             The Manning's roughness of the surface's coarse material
+        n_f : float
+            The Manning's roughness of the surface's fine material
         rho_w : int
             The density of water [kg/m^3]
         rho_s : int
@@ -178,12 +182,14 @@ class OverlandFlowTransporter(Component):
         super().__init__(grid)
 
         # Parameters
+        self._Sa_ini = Sa_ini
+        self._porosity = porosity
         self._n_c = n_c
+        self._n_f_ini = n_f
         self._rho_w = rho_w
         self._rho_s = rho_s
         self._g = g
         self._d50 = d50
-        self._d95 = d95 # I'm adding this for the calc overland roughness
         self._tau_c = tau_c
         
         # Fields and arrays
@@ -205,9 +211,7 @@ class OverlandFlowTransporter(Component):
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
         self._dzdt = grid.at_node["sediment__rate_of_change"]
 
-# keep this if statement for runoff, use this version
-
-    def calc_overland_roughness_OLD(self):
+    def calc_overland_roughness(self):
         """Calculate and return overland flow surface roughness and 
         shear stress partitioning ratio.
         """
@@ -215,7 +219,7 @@ class OverlandFlowTransporter(Component):
         for i in range(len(self._unit_discharge)):
             if self._unit_discharge[i] > 0:
                 if self._road_flag[i] == 1:
-                    self._n_f[i] = 0.05
+                    self._n_f[i] = self._n_f_ini  
                     if self._active_fines[i] <= self._active_coarse[i]:
                         # should the active_coarse be _active? not coarse
                         self._n_t[i] = self._n_c + (self._active_fines[i]/self._active_depth[i])*(self._n_f[i] - self._n_c)
@@ -231,33 +235,32 @@ class OverlandFlowTransporter(Component):
                 self._n_t[i] = 0 # was 0
 
               
-    # this version of the function prevents zero and negative manning's roughness coefficients 
+    # this version of the function prevents negative manning's roughness coefficients 
     # this is to prevent self._f_s from being an imaginary number. 
     # I think it is impacting the shear stress
-
-    def calc_overland_roughness(self):
+    
+    def calc_overland_roughness_NEW(self):
         """Calculate overland flow surface roughness and shear stress partitioning ratio."""
         self._unit_discharge = self._discharge / self.grid.dx
 
         for i in range(len(self._unit_discharge)):
         # Base Manning's n for flow surface (independent of discharge)
-            if self._road_flag[i] == 1:
-                self._n_f[i] = 0.05  # road (asphalt)
-                # Compute total roughness depending on sediment composition
-                if self._active_depth[i] > 0:
+            # if self._unit_discharge[i] > 0: # added this back in + the else statement
+                if self._road_flag[i] == 1:
+                    self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
                     if self._active_fines[i] <= self._active_coarse[i]:
                         self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) * (self._n_f[i] - self._n_c)
                     else:
                         self._n_t[i] = self._n_f[i]
-                else:
-                    # Fallback if no active layer thickness (avoid zero)
-                    self._n_t[i] = self._n_f[i]
+            # else:
+            #     self._n_f[i] = 0
+            #     self._n_t[i] = 0
 
             # Compute shear stress partitioning ratio safely
-            ratio = self._n_f[i] / self._n_t[i]
-            if ratio <= 0:
-                ratio = 1.0  # physically meaningless case, default to 1
-            self._f_s[i] = ratio ** 1.5
+                ratio = self._n_f[i] / self._n_t[i]
+                if ratio <= 0:
+                    ratio = 1  # physically meaningless case, default to 1
+                self._f_s[i] = ratio ** 1.5
 
     # this is the original one that gives the slopes that get to zero
     def calc_overland_depth_OLD(self):
@@ -303,9 +306,9 @@ class OverlandFlowTransporter(Component):
         self._water_depth[~np.isfinite(self._water_depth)] = 0.0
 
         # optional: cap to physically realistic max depth (e.g., 1 m)
-        self._water_depth = np.minimum(self._water_depth, 1.0)
+        self._water_depth = np.minimum(self._water_depth, 0.5)
 
-    def calc_overland_shear_stress(self):   # make sure safe slope is used here?
+    def calc_overland_shear_stress(self):   
         """Calculate and return overland flow partitioned shear stress.
         """
         self.calc_overland_depth()
@@ -327,20 +330,61 @@ class OverlandFlowTransporter(Component):
                 ) * self.grid.dx
             else:
                 self._sediment_outflux[i] = 0.0
-        # this below is new stuff from mr gpt
+
         self._sediment_outflux[~np.isfinite(self._sediment_outflux)] = 0.0
         self._sediment_outflux = np.maximum(self._sediment_outflux, 0.0)
 
+# this version is functional for OFT sediment load, but severely underpredicts dz estimate of sediment load
+    def calc_overland_sediment_rate_of_change_edit(self):
+        """Update the rate of thickness change of sediment at each core node.
+        """
+        self.calc_overland_transport_capacity()
+        cores = self.grid.core_nodes
+        area = self.grid.area_of_cell[self.grid.cell_at_node]
+       
+        # Determine whether system is transport- or energy-limited.
+        for i in range(len(self._sediment_outflux)):
+            transport_capacity = np.zeros_like(self._sediment_outflux)
+            transport_capacity[i] = self._active_depth[i]*area[i]
+            
+            # self._sediment_influx[:] = 0.0
+            # for c in cores:  # send sediment downstream
+            #     r = self._receiver_node[c]
+            #     self._sediment_influx[r] += self._sediment_outflux[c]
+
+            
+            # # self._sediment_outflux[i] = min(
+            # #     self._sediment_outflux[i], transport_capacity[i])
+                
+            # sediment_flux = np.zeros_like(self._sediment_outflux)
+            # sediment_flux[i] = self._sediment_influx[i] - self._sediment_outflux[i]
+        
+            # sediment_flux[i] = min(sediment_flux[i], transport_capacity[i])
+        
+        self._sediment_influx[:] = 0.0
+        for c in cores:  # send sediment downstream
+            r = self._receiver_node[c]
+            self._sediment_influx[r] += self._sediment_outflux[c]
+        
+        sediment_flux = np.zeros_like(self._sediment_outflux)
+        sediment_flux[cores] = self._sediment_influx[cores] - self._sediment_outflux[cores]
+        sediment_flux[cores] = np.maximum(sediment_flux[cores], -transport_capacity[cores])
+
+        self._dzdt[cores] = (
+            sediment_flux[cores] / (area[cores] * (1 - self._porosity))
+        )
+
+# original calc_overland_sediment_rate_of_change with minor edits
     def calc_overland_sediment_rate_of_change(self):
         """Update the rate of thickness change of sediment at each core node.
         """
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
+        area = self.grid.area_of_cell[self.grid.cell_at_node]
 
-        # Determine whether system is transport- or energy-limited.
         for i in range(len(self._sediment_outflux)):
             self._sediment_outflux[i] = min(
-                self._sediment_outflux[i], ((self._active_fines[i])
+                self._sediment_outflux[i], ((self._Sa_ini)
                 * self.grid.area_of_cell[self.grid.cell_at_node[i]])
                 )
         
@@ -350,11 +394,7 @@ class OverlandFlowTransporter(Component):
             self._sediment_influx[r] += self._sediment_outflux[c]
         self._dzdt[cores] = (
             self._sediment_influx[cores] - self._sediment_outflux[cores]
-        ) / self.grid.area_of_cell[self.grid.cell_at_node[cores]]
-                # clamp dzdt to plausible rates to avoid numerical blow-up (e.g., +/- 0.01 m/s)
-        # this is also mr gpt
-        dzdt_max = 1e-3  # [m/s] (adjust as needed)
-        self._dzdt = np.clip(self._dzdt, -dzdt_max, dzdt_max)
+            ) / (area[cores] * (1 - self._porosity))
 
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
@@ -365,6 +405,8 @@ class OverlandFlowTransporter(Component):
         
         self._elev += self._dzdt * dt * 86400 
         self._active_fines += self._dzdt*dt*86400
+
+        # self.cap_active_layer()
+
         self._active_dz = (self._active_fines-self._active_fines_init)
         self._active_depth += self._active_dz
-        
