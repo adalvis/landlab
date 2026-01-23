@@ -16,6 +16,7 @@ class TruckPassErosion(Component):
     on traffic-induced, erosion-enhancing processes: pumping, crushing,
     scattering (and by default, flow rerouting).
 
+    
     References
     ----------
     Alvis, A. D., Luce, C. H., & Istanbulluoglu, E. (2023). How does traffic 
@@ -136,7 +137,7 @@ class TruckPassErosion(Component):
         f_sc = 0.725,
         f_bf = 0.20,
         f_bc = 0.80,
-        scat_loss = 8e-5, #current best guess
+        scat_loss = 8e-5, #current best gues
     ):
         """Initialize TruckPassErosion.
 
@@ -192,7 +193,7 @@ class TruckPassErosion(Component):
         self._k_cs = k_cs
         self._k_cb = k_cb
 
-        self._f_af = f_af
+        self._f_af = f_af 
         self._f_ac = f_ac
         self._f_sf = f_sf
         self._f_sc = f_sc
@@ -316,7 +317,10 @@ class TruckPassErosion(Component):
         self._active_init = self._active
         self._surf_init = self._surfacing
         self._ball_init = self._ballast
-        self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
+        # self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
+        self._truck_num = self._truck_num_avg
+        # edited out line above and replaced with truck_num = set truck number 
+        # so that the same number of trucks are run each time
         
         if self._truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
