@@ -152,6 +152,7 @@ COMPONENTS = [
     NormalFault,
     OverlandFlow,
     OverlandFlowBates,
+    OverlandFlowTransporter,
     PerronNLDiffuse,
     PotentialEvapotranspiration,
     PotentialityFlowRouter,
