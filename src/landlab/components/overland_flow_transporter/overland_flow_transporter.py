@@ -140,6 +140,16 @@ class OverlandFlowTransporter(Component):
             "mapping": "node",
             "doc": "Depth of water",
         },
+        "transport__capacity": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m**3/time",
+            "mapping": "node",
+            "doc": "Sediment transport capacity",
+        },
+
+
     }
 
     def __init__(
@@ -205,34 +215,10 @@ class OverlandFlowTransporter(Component):
         self._n_f = grid.at_node["grain__roughness"]
         self._n_t = grid.at_node["total__roughness"]
         self._water_depth = grid.at_node["water__depth"]
+        self._transport_capacity = grid.at_node["transport__capacity"]
         self._sediment_influx = grid.at_node["sediment__volume_influx"]
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
         self._dzdt = grid.at_node["sediment__rate_of_change"]
-
-    # def calc_overland_roughness_OLD(self):
-    #     """Calculate and return overland flow surface roughness and 
-    #     shear stress partitioning ratio.
-    #     """
-    #     self._unit_discharge = self._discharge/self.grid.dx
-    #     for i in range(len(self._unit_discharge)):
-    #         if self._unit_discharge[i] > 0:
-    #             if self._road_flag[i] == 1:
-    #                 self._n_f[i] = self._n_f_ini  
-    #                 if self._active_fines[i] <= self._active_coarse[i]:
-    #                     # should the active_coarse be _active? not coarse
-    #                     self._n_t[i] = self._n_c + (self._active_fines[i]/self._active_depth[i])\
-    #                         *(self._n_f[i] - self._n_c)
-    #                     self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
-    #                 else:
-    #                     self._n_t[i] = self._n_f[i]
-    #                     self._f_s[i] = (self._n_f[i]/self._n_t[i])**(1.5)
-
-                        
-    #         # i think this is wrong? shouldn't the n_f be independent of what the discharge is?
-    #         else:
-    #             self._n_f[i] = 0 # was 0
-    #             self._n_t[i] = 0 # was 0
-
               
     # # this version of the function prevents negative manning's roughness coefficients 
     # # this is to prevent self._f_s from being an imaginary number. 
@@ -243,54 +229,42 @@ class OverlandFlowTransporter(Component):
 
         for i in range(len(self._unit_discharge)):
         # Base Manning's n for flow surface (independent of discharge)
-            # if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
-            #     if self._road_flag[i] == 1:
-            #         self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
-            #         if (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] > 0):
-            #             self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) \
-            #                 * (self._n_f[i] - self._n_c)
-            #         elif (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] <= 0):
-            #             self._n_t[i] = self._n_c
-            #         else:
-            #             self._n_t[i] = self._n_f[i]
-            #         self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
-            # else:
-            #     self._n_f[i] = 0
-            #     self._n_t[i] = 0
-            #     self._f_s[i] = 0
+            if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
+                if self._road_flag[i] == 1:
+                    self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
+                    if (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] > 0):
+                        self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) \
+                            * (self._n_f[i] - self._n_c)
+                    elif (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] <= 0):
+                        self._n_t[i] = self._n_c
+                    else:
+                        self._n_t[i] = self._n_f[i]
+                    self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
+            else:
+                self._n_f[i] = 0
+                self._n_t[i] = 0
+                self._f_s[i] = 0
     
         # self._unit_discharge = self._discharge / self.grid.dx
 
-        # for i in range(len(self._unit_discharge)):
-        # Base Manning's n for flow surface (independent of discharge)
-            # if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
-            if self._road_flag[i] == 1:
-                self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
-                if self._active_fines[i] <= self._active_coarse[i]:
-                    self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) * (self._n_f[i] - self._n_c)
-                else:
-                    self._n_t[i] = self._n_f[i]
-            # else:
-            #     self._n_f[i] = 0
-            #     self._n_t[i] = 0
+        # # for i in range(len(self._unit_discharge)):
+        # # Base Manning's n for flow surface (independent of discharge)
+        #     # if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
+        #     if self._road_flag[i] == 1:
+        #         self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
+        #         if self._active_fines[i] <= self._active_coarse[i]:
+        #             self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) * (self._n_f[i] - self._n_c)
+        #         else:
+        #             self._n_t[i] = self._n_f[i]
+        #     # else:
+        #     #     self._n_f[i] = 0
+        #     #     self._n_t[i] = 0
 
-        # Compute shear stress partitioning ratio safely
-            ratio = self._n_f[i] / self._n_t[i]
-            if ratio <= 0:
-                ratio = 1  # physically meaningless case, default to 1
-            self._f_s[i] = ratio ** 1.5
-
-    # this is the original one that gives the slopes that get to zero
-    # def calc_overland_depth_OLD(self):
-    #     """Calculate and return overland flow water depth.
-    #     """
-    #     self.calc_overland_roughness()
-    #     for i in range(len(self._unit_discharge)):
-    #         if self._unit_discharge[i] > 0:
-    #             if self._road_flag[i] == 1:
-    #                 self._water_depth[i]=((self._n_t[i]*self._unit_discharge[i])/(self._slope[i]**(0.5)))**(3/5)
-    #         else:
-    #             self._water_depth[i]=0
+        # # Compute shear stress partitioning ratio safely
+        #     ratio = self._n_f[i] / self._n_t[i]
+        #     if ratio <= 0:
+        #         ratio = 1  # physically meaningless case, default to 1
+        #     self._f_s[i] = ratio ** 1.5
 
     # CALC_OVERLAND_DEPTH IS DONE
     def calc_overland_depth(self):
@@ -336,7 +310,6 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_depth()
 
         self._shear_stress = self._rho_w*self._g*self._water_depth*self._slope_safe*self._f_s
-        # self._shear_stress = self._rho_w*self._g*self._water_depth*slope_safe
 
     def calc_overland_transport_capacity(self):
         """Calculate and return transport capacity.
@@ -345,16 +318,16 @@ class OverlandFlowTransporter(Component):
 
         for i in range(len(self._shear_stress)):
             if self._shear_stress[i] >= self._tau_c:
-                self._sediment_outflux[i] = (
+                self._transport_capacity[i] = (
                     ((10**(-4.348))
                     / (self._rho_s*((self._d50)**(0.811))))
                     * (self._shear_stress[i]-self._tau_c)**(2.457)
-                ) * self.grid.dx
+                ) * self.grid.dx #[m^3/s]
             else:
-                self._sediment_outflux[i] = 0.0
+                self._transport_capacity[i] = 0.0
 
-        self._sediment_outflux[~np.isfinite(self._sediment_outflux)] = 0.0
-        self._sediment_outflux = np.maximum(self._sediment_outflux, 0.0)
+        self._transport_capacity[~np.isfinite(self._transport_capacity)] = 0.0
+        self._transport_capacity[:] = np.maximum(self._transport_capacity, 0.0)
 
 # original calc_overland_sediment_rate_of_change with minor edits
     def calc_overland_sediment_rate_of_change(self, dt):
@@ -363,14 +336,13 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
         area = self.grid.area_of_cell[self.grid.cell_at_node]
-
-        for i in range(len(self._sediment_outflux)):
+       
+        for i in range(len(self._transport_capacity)):
             self._sediment_outflux[i] = min(
-                self._sediment_outflux[i], ((self._active_depth[i])     
-                * self.grid.area_of_cell[self.grid.cell_at_node[i]] / (dt*86400))
+                self._transport_capacity[i], ((self._active_depth[i])     
+                * area[i] / (dt*86400))
                 )
-            # verified that sediment outflux is positive, so this min limitation should be working
-        
+
         self._sediment_influx[:] = 0.0
         for c in cores:  # send sediment downstream
             r = self._receiver_node[c]
@@ -383,12 +355,15 @@ class OverlandFlowTransporter(Component):
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
+        #Active fines cannot be negative--->FIX THIS
         self._active_fines_init = self._active_fines.copy()
 
         self.calc_overland_sediment_rate_of_change(dt)
         
         self._elev += self._dzdt * dt * 86400 
         self._active_fines += self._dzdt*dt*86400
+        # self._active_fines[:] = np.maximum(self._active_fines, 0.0)
 
         self._active_dz = (self._active_fines-self._active_fines_init)
         self._active_depth += self._active_dz
+        # self._active_depth[:] = np.maximum(self._active_depth, 0.0)
