@@ -161,7 +161,7 @@ class OverlandFlowTransporter(Component):
         rho_s=2650,
         g=9.81,
         d50=2e-4, # this is so small, originally d50 = 1.8e-5
-        tau_c=0.052,
+        tau_c=0.178,
         porosity = 0.35,
         longitudinal_slope = 0.125
     ):
