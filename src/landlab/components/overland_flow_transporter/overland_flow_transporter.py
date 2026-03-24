@@ -243,7 +243,7 @@ class OverlandFlowTransporter(Component):
             else:
                 self._n_f[i] = 0
                 self._n_t[i] = 0
-                self._f_s[i] = 1
+                self._f_s[i] = 0
     
         # self._unit_discharge = self._discharge / self.grid.dx
 
