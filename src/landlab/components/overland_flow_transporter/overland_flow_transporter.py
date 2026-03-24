@@ -220,18 +220,14 @@ class OverlandFlowTransporter(Component):
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
         self._dzdt = grid.at_node["sediment__rate_of_change"]
               
-    # # this version of the function prevents negative manning's roughness coefficients 
-    # # this is to prevent self._f_s from being an imaginary number. 
-
     def calc_overland_roughness(self):
         """Calculate overland flow surface roughness and shear stress partitioning ratio."""
         self._unit_discharge = self._discharge / self.grid.dx
 
         for i in range(len(self._unit_discharge)):
-        # Base Manning's n for flow surface (independent of discharge)
-            if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
+            if self._unit_discharge[i] > 0:
                 if self._road_flag[i] == 1:
-                    self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
+                    self._n_f[i] = self._n_f_ini
                     if (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] > 0):
                         self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) \
                             * (self._n_f[i] - self._n_c)
@@ -244,29 +240,7 @@ class OverlandFlowTransporter(Component):
                 self._n_f[i] = 0
                 self._n_t[i] = 0
                 self._f_s[i] = 0
-    
-        # self._unit_discharge = self._discharge / self.grid.dx
 
-        # # for i in range(len(self._unit_discharge)):
-        # # Base Manning's n for flow surface (independent of discharge)
-        #     # if self._unit_discharge[i] > 0: # commenting this and the else statement below out prevents the model from severely underpredicting transport
-        #     if self._road_flag[i] == 1:
-        #         self._n_f[i] = self._n_f_ini  # road - new value 0.015, old 0.05
-        #         if self._active_fines[i] <= self._active_coarse[i]:
-        #             self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) * (self._n_f[i] - self._n_c)
-        #         else:
-        #             self._n_t[i] = self._n_f[i]
-        #     # else:
-        #     #     self._n_f[i] = 0
-        #     #     self._n_t[i] = 0
-
-        # # Compute shear stress partitioning ratio safely
-        #     ratio = self._n_f[i] / self._n_t[i]
-        #     if ratio <= 0:
-        #         ratio = 1  # physically meaningless case, default to 1
-        #     self._f_s[i] = ratio ** 1.5
-
-    # CALC_OVERLAND_DEPTH IS DONE
     def calc_overland_depth(self):
         """Compute overland flow depth using a safe formulation."""
         self.calc_overland_roughness()
@@ -277,9 +251,6 @@ class OverlandFlowTransporter(Component):
         # adding a upper limit of 3x the initial longitudinal slope as a temporary measure since slope is exploding
         self._slope_safe = np.minimum(self._slope_safe, self._longitudinal_slope*3)    
         #^^Try running without this
-
-        # compute unit discharge (width-averaged)
-        self._unit_discharge = self._discharge / self.grid.dx
 
         # initialize depth array to zero
         self._water_depth[:] = 0.0
