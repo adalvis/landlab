@@ -235,7 +235,7 @@ class OverlandFlowTransporter(Component):
                         self._n_t[i] = self._n_c
                     else:
                         self._n_t[i] = self._n_f[i]
-                    self._f_s[i] = 1#(self._n_f[i] / self._n_t[i]) ** 1.5
+                    self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
             else:
                 self._n_f[i] = 0
                 self._n_t[i] = 0
