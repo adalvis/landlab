@@ -102,11 +102,36 @@ class OverlandFlowTransporter(Component):
         },
         "active__coarse": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "Depth of coarse sediment in the active layer",
+        },
+        "surfacing__depth": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "Depth of surfacing layer of sediment of the road cross\
+                section",
+        },
+        "surfacing__fines": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "Depth of fine sediment in the surfacing layer",
+        },
+        "surfacing__coarse": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "Depth of coarse sediment in the surfacing layer",
         },
         "grain__roughness": {
             "dtype": float,
@@ -208,6 +233,9 @@ class OverlandFlowTransporter(Component):
         self._active_depth = grid.at_node["active__depth"]
         self._active_fines = grid.at_node["active__fines"]
         self._active_coarse = grid.at_node["active__coarse"]
+        self._surfacing_depth = grid.at_node["surfacing__depth"]
+        self._surfacing_fines = grid.at_node["surfacing__fines"]
+        self._surfacing_coarse = grid.at_node["surfacing__coarse"]
         self._road_flag = grid.at_node["flag"]
         
         super().initialize_output_fields()
@@ -328,13 +356,23 @@ class OverlandFlowTransporter(Component):
         """
         #Active fines cannot be negative--->FIX THIS
         self._active_fines_init = self._active_fines.copy()
+        self._surfacing_fines_init = self._surfacing_fines.copy()
 
         self.calc_overland_sediment_rate_of_change(dt)
         
         self._elev += self._dzdt * dt * 86400 
         self._active_fines += self._dzdt*dt*86400
-        # self._active_fines[:] = np.maximum(self._active_fines, 0.0)
+
+        for i in range(len(self._active_fines)):
+            if self._active_fines[i] < 0:
+                print("Negative active__fines:", self._active_fines[i])
+                print("Pre surfacing__fines:", self._surfacing_fines[i])
+                self._surfacing_fines[i] += self._dzdt[i]*dt*86400
+                print("Post surfacing__fines:",self._surfacing_fines[i])
+                # self._surfacing_depth[i] += self._dzdt[i]*dt*86400
+                self._active_fines[i] = 0
 
         self._active_dz = (self._active_fines-self._active_fines_init)
         self._active_depth += self._active_dz
-        # self._active_depth[:] = np.maximum(self._active_depth, 0.0)
+        self._surfacing_dz = (self._surfacing_fines-self._surfacing_fines_init)
+        self._surfacing_depth += self._surfacing_dz
