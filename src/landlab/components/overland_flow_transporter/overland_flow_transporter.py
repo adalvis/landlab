@@ -238,6 +238,30 @@ class OverlandFlowTransporter(Component):
         self._surfacing_coarse = grid.at_node["surfacing__coarse"]
         self._road_flag = grid.at_node["flag"]
         
+
+        if "ballast__elevation" in grid.at_node:
+            self._ballast_elev = grid.at_node["ballast__elevation"]
+        else:
+            self._ballast_elev = grid.add_zeros(
+                "ballast__elevation", at="node", dtype=float
+            )
+
+            self._ballast_elev[:] = (
+                self._elev - self._active_depth \
+                - self._surfacing_depth
+            )
+        
+        if "surfacing__elevation" in grid.at_node:
+            self._surfacing_elev = grid.at_node["surfacing__elevation"]
+        else:
+            self._surfacing_elev = grid.add_zeros(
+                "surfacing__elevation", at="node", dtype=float
+            )
+
+            self._surfacing_elev[:] = (
+                self._elev - self._active_depth
+            )
+
         super().initialize_output_fields()
         self._f_s = grid.at_node["shear_stress__partitioning"]
         self._n_f = grid.at_node["grain__roughness"]
@@ -278,7 +302,6 @@ class OverlandFlowTransporter(Component):
 
         # adding a upper limit of 3x the initial longitudinal slope as a temporary measure since slope is exploding
         self._slope_safe = np.minimum(self._slope_safe, self._longitudinal_slope*3)    
-        #^^Try running without this
 
         # initialize depth array to zero
         self._water_depth[:] = 0.0
@@ -360,7 +383,7 @@ class OverlandFlowTransporter(Component):
 
         self.calc_overland_sediment_rate_of_change(dt)
         
-        self._elev += self._dzdt * dt * 86400 
+        # self._elev += self._dzdt * dt * 86400 
         self._active_fines += self._dzdt*dt*86400
 
         for i in range(len(self._active_fines)):
@@ -372,7 +395,15 @@ class OverlandFlowTransporter(Component):
                 # self._surfacing_depth[i] += self._dzdt[i]*dt*86400
                 self._active_fines[i] = 0
 
-        self._active_dz = (self._active_fines-self._active_fines_init)
+        self._active_dz = (self._active_fines - self._active_fines_init)
         self._active_depth += self._active_dz
-        self._surfacing_dz = (self._surfacing_fines-self._surfacing_fines_init)
+        self._surfacing_dz = (self._surfacing_fines - self._surfacing_fines_init)
         self._surfacing_depth += self._surfacing_dz
+
+        self._surfacing_elev += self._surfacing_dz
+
+        print("active_dz:",self._active_dz)
+        print("surfacing_dz:",self._surfacing_dz)
+        self._elev += (
+            self._active_dz + self._surfacing_dz
+        )

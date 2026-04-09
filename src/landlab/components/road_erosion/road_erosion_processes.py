@@ -205,16 +205,47 @@ class TruckPassErosion(Component):
         self._half_width = half_width
         self._full_tire = full_tire
         
+        # Get layers for sediment depths
+        self._active_depth = grid.at_node["active__depth"]
+        self._surfacing_depth = grid.at_node["surfacing__depth"]
+        self._ballast_depth = grid.at_node["ballast__depth"]
+
         # Get elevation fields
         self._elev = grid.at_node['topographic__elevation']
-        self._active_elev = grid.at_node['active__elev']
-        self._surfacing_elev = grid.at_node['surfacing__elev']
-        self._ballast_elev = grid.at_node['ballast__elev']
 
-        # Get layers for sediment depths
-        self._active = grid.at_node["active__depth"]
-        self._surfacing = grid.at_node["surfacing__depth"]
-        self._ballast = grid.at_node["ballast__depth"]
+        if "ballast__elevation" in grid.at_node:
+            self._ballast_elev = grid.at_node["ballast__elevation"]
+        else:
+            self._ballast_elev = grid.add_zeros(
+                "ballast__elevation", at="node", dtype=float
+            )
+
+            self._ballast_elev[:] = (
+                self._elev - self._active_depth \
+                - self._surfacing_depth
+            )
+        
+        if "surfacing__elevation" in grid.at_node:
+            self._surfacing_elev = grid.at_node["surfacing__elevation"]
+        else:
+            self._surfacing_elev = grid.add_zeros(
+                "surfacing__elevation", at="node", dtype=float
+            )
+
+            self._surfacing_elev[:] = (
+                self._elev - self._active_depth
+            )
+
+        if "active__elevation" in grid.at_node:
+            self._active_elev = grid.at_node["active__elevation"]
+        else:
+            self._active_elev = grid.add_zeros(
+                "active__elevation", at="node", dtype=float
+            )
+
+            self._active_elev[:] = (
+                self._elev
+            )
 
         # Get average number of trucks per day
         self._truck_num_avg = truck_num
@@ -229,12 +260,12 @@ class TruckPassErosion(Component):
         self._ball_coarse = grid.at_node['ballast__coarse']
         
         # Initialize each of the fraction depths
-        self._active_fine += self._active*self._f_af
-        self._active_coarse += self._active*self._f_ac
-        self._surf_fine += self._surfacing*self._f_sf
-        self._surf_coarse += self._surfacing*self._f_sc
-        self._ball_fine += self._ballast*self._f_bf
-        self._ball_coarse += self._ballast*self._f_bc	
+        self._active_fine += self._active_depth*self._f_af
+        self._active_coarse += self._active_depth*self._f_ac
+        self._surf_fine += self._surfacing_depth*self._f_sf
+        self._surf_coarse += self._surfacing_depth*self._f_sc
+        self._ball_fine += self._ballast_depth*self._f_bf
+        self._ball_coarse += self._ballast_depth*self._f_bc	
 
     @property
     def sed_added(self):
@@ -314,9 +345,9 @@ class TruckPassErosion(Component):
         return(self._tracks)
 
     def run_one_step(self):
-        self._active_init = self._active
-        self._surf_init = self._surfacing
-        self._ball_init = self._ballast
+        self._active_init = self._active_depth.copy()
+        self._surf_init = self._surfacing_depth.copy()
+        self._ball_init = self._ballast_depth.copy()
         # self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
         self._truck_num = self._truck_num_avg
         # edited out line above and replaced with truck_num = set truck number 
@@ -383,12 +414,12 @@ class TruckPassErosion(Component):
 
 
                     #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surfacing/self._surfacing)
-                    self._q_pb = self._u_pb*(self._ballast/self._ballast)
+                    self._q_ps = self._u_ps*(self._surfacing_depth/self._surfacing_depth)
+                    self._q_pb = self._u_pb*(self._ballast_depth/self._ballast_depth)
 
                     #calculate crushing fluxes
-                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing)
-                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast)
+                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing_depth)
+                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast_depth)
 
                     #update surfacing
                     self._surf_coarse[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
@@ -446,12 +477,12 @@ class TruckPassErosion(Component):
                             self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss
 
                     #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surfacing/self._surfacing)
-                    self._q_pb = self._u_pb*(self._ballast/self._ballast)
+                    self._q_ps = self._u_ps*(self._surfacing_depth/self._surfacing_depth)
+                    self._q_pb = self._u_pb*(self._ballast_depth/self._ballast_depth)
 
                     #calculate crushing fluxes
-                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing)
-                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast)
+                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing_depth)
+                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast_depth)
 
                     #update surfacing
                     self._surf_coarse[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
@@ -467,13 +498,18 @@ class TruckPassErosion(Component):
                     self._active_fine[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
 
         #update outputs
-        self._ball_dz =  (self._ball_coarse + self._ball_fine) - self._ball_init 
-        self._ballast += self._ball_dz
-        self._surf_dz = (self._surf_coarse + self._surf_fine) - self._surf_init
-        self._surfacing += self._surf_dz
-        self._active_dz = (self._active_coarse + self._active_fine) - self._active_init
-        self._active += self._active_dz
+        self._ballast_dz = ((self._ball_coarse + self._ball_fine) - self._ball_init)
+        self._ballast_depth += self._ballast_dz
+        self._surfacing_dz = ((self._surf_coarse + self._surf_fine) - self._surf_init)
+        self._surfacing_depth += self._surfacing_dz
+        self._active_dz = ((self._active_coarse + self._active_fine) - self._active_init)
+        self._active_depth += self._active_dz
         
-        self._elev += self._ball_dz + \
-            self._surf_dz + \
-            self._active_dz
+        self._ballast_elev += self._ballast_dz
+        self._surfacing_elev += self._ballast_dz + self._surfacing_dz
+        self._elev += (
+            self._ballast_dz
+            + self._surfacing_dz
+            + self._active_dz
+            )
+        
