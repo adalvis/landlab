@@ -211,7 +211,7 @@ class TruckPassErosion(Component):
         self._ballast_depth = grid.at_node["ballast__depth"]
 
         # Get elevation fields
-        self._elev = grid.at_node['topographic__elevation']
+        self._topographic_elev = grid.at_node['topographic__elevation']
 
         if "ballast__elevation" in grid.at_node:
             self._ballast_elev = grid.at_node["ballast__elevation"]
@@ -221,7 +221,7 @@ class TruckPassErosion(Component):
             )
 
             self._ballast_elev[:] = (
-                self._elev - self._active_depth \
+                self._topographic_elev - self._active_depth \
                 - self._surfacing_depth
             )
         
@@ -233,18 +233,7 @@ class TruckPassErosion(Component):
             )
 
             self._surfacing_elev[:] = (
-                self._elev - self._active_depth
-            )
-
-        if "active__elevation" in grid.at_node:
-            self._active_elev = grid.at_node["active__elevation"]
-        else:
-            self._active_elev = grid.add_zeros(
-                "active__elevation", at="node", dtype=float
-            )
-
-            self._active_elev[:] = (
-                self._elev
+                self._topographic_elev - self._active_depth
             )
 
         # Get average number of trucks per day
@@ -498,18 +487,17 @@ class TruckPassErosion(Component):
                     self._active_fine[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
 
         #update outputs
-        self._ballast_dz = ((self._ball_coarse + self._ball_fine) - self._ball_init)
-        self._ballast_depth += self._ballast_dz
-        self._surfacing_dz = ((self._surf_coarse + self._surf_fine) - self._surf_init)
-        self._surfacing_depth += self._surfacing_dz
-        self._active_dz = ((self._active_coarse + self._active_fine) - self._active_init)
-        self._active_depth += self._active_dz
+        self._ballast_depth += ((self._ball_coarse + self._ball_fine) - self._ball_init)
+        self._surfacing_depth += ((self._surf_coarse + self._surf_fine) - self._surf_init)
+        self._active_depth += ((self._active_coarse + self._active_fine) - self._active_init)
         
-        self._ballast_elev += self._ballast_dz
-        self._surfacing_elev += self._ballast_dz + self._surfacing_dz
-        self._elev += (
-            self._ballast_dz
-            + self._surfacing_dz
-            + self._active_dz
+        self._ballast_elev += (
+            self._ballast_depth - self._ball_init
+            )
+        self._surfacing_elev[:] =(
+            self._ballast_elev[:] + self._surfacing_depth[:]
+        )
+        self._topographic_elev[:] = (
+            self._ballast_elev[:] + self._surfacing_depth[:] + self._active_depth[:]
             )
         
