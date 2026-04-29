@@ -305,7 +305,7 @@ class OverlandFlowTransporter(Component):
         self._slope_safe = np.maximum(self._slope, slope_eps)
 
         # adding a upper limit of 3x the initial longitudinal slope as a temporary measure since slope is exploding
-        # self._slope_safe = np.minimum(self._slope_safe, self._longitudinal_slope*3)    
+        self._slope_safe[:] = np.minimum(self._slope_safe, self._longitudinal_slope*3)    
 
         # initialize depth array to zero
         self._water_depth[:] = 0.0
