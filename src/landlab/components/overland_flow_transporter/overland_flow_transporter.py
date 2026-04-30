@@ -288,10 +288,6 @@ class OverlandFlowTransporter(Component):
                     else:
                         self._n_t[i] = self._n_f[i]
                     self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
-                elif self._road_flag[i] ==0:
-                    self._n_f[i] = 0.05
-                    self._n_t[i] = 0.05
-                    self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** (24/13)
             else:
                 self._n_f[i] = 0
                 self._n_t[i] = 0
@@ -312,7 +308,7 @@ class OverlandFlowTransporter(Component):
 
         # loop over nodes (safe computation)
         for i in range(len(self._slope)):
-            if (self._unit_discharge[i] > 0):# and (self._road_flag[i] == 1):
+            if (self._unit_discharge[i] > 0) and (self._road_flag[i] == 1):
                 safe_denom = np.sqrt(self._slope_safe[i])
                 raw = (self._n_t[i] * self._unit_discharge[i]) / safe_denom
 
