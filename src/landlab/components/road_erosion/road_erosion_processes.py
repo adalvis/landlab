@@ -337,16 +337,16 @@ class TruckPassErosion(Component):
         self._active_init = self._active_depth.copy()
         self._surf_init = self._surfacing_depth.copy()
         self._ball_init = self._ballast_depth.copy()
-        self._truck_num = np.random.poisson(self._truck_num_avg,1).item()
-        # self._truck_num = self._truck_num_avg
+        self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
+        # self.truck_num = self._truck_num_avg
         # edited out line above and replaced with truck_num = set truck number 
         # so that the same number of trucks are run each time
         
-        if self._truck_num == 0:
+        if self.truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
             pass
         else:
-            for _ in range(self._truck_num):
+            for _ in range(self.truck_num):
                 self.tire_tracks = self.calc_tire_tracks() 
 
                 if self._full_tire == False:
