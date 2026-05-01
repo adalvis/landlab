@@ -271,6 +271,11 @@ class OverlandFlowTransporter(Component):
         self._sediment_influx = grid.at_node["sediment__volume_influx"]
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
         self._dzdt = grid.at_node["sediment__rate_of_change"]
+
+    @property
+    def shear_stress(self):
+        """The shear stress at each node"""
+        return self._shear_stress
               
     def calc_overland_roughness(self):
         """Calculate overland flow surface roughness and shear stress partitioning ratio."""
