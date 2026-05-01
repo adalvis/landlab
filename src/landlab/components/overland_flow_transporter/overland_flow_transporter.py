@@ -366,7 +366,7 @@ class OverlandFlowTransporter(Component):
        
         for i in range(len(self._transport_capacity)):
             self._sediment_outflux[i] = min(
-                self._transport_capacity[i], ((self._active_depth[i])     
+                self._transport_capacity[i], ((self._active_fines[i])     
                 * area[i] / (dt*86400))
                 )
 
@@ -389,10 +389,10 @@ class OverlandFlowTransporter(Component):
         
         self._active_fines += self._dzdt*dt*86400
 
-        for i in range(len(self._active_fines)):
-            if self._active_fines[i] < 0:
-                self._surfacing_fines[i] += self._active_fines[i]
-                self._active_fines[i] = 0
+        # for i in range(len(self._active_fines)):
+        #     if self._active_fines[i] < 0:
+        #         self._surfacing_fines[i] += self._active_fines[i]
+        #         self._active_fines[i] = 0
 
         self._active_depth += (self._active_fines - self._active_fines_init)
         self._surfacing_depth += (self._surfacing_fines - self._surfacing_fines_init)
