@@ -395,11 +395,11 @@ class OverlandFlowTransporter(Component):
         #         self._active_fines[i] = 0
 
         self._active_depth += (self._active_fines - self._active_fines_init)
-        self._surfacing_depth += (self._surfacing_fines - self._surfacing_fines_init)
+        # self._surfacing_depth += (self._surfacing_fines - self._surfacing_fines_init)
 
-        self._surfacing_elev[:] = (
-            self._ballast_elev[:] + self._surfacing_depth[:]
-        )
+        # self._surfacing_elev[:] = (
+        #     self._ballast_elev[:] + self._surfacing_depth[:]
+        # )
         self._topographic_elev[:] = (
             self._ballast_elev[:] + self._surfacing_depth[:] + self._active_depth[:]
         )
