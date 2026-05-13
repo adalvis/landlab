@@ -38,21 +38,46 @@ class TruckPassErosion(Component):
             "doc": "depth of active layer of sediment of the road cross\
                 section",
         },
-        "active__fines": {
+        "active__depth_fines": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of fine sediment in the active layer",
         },
-        "active__coarse": {
+        "active__depth_coarse": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of coarse sediment in the active layer",
+        },
+        "active__mass": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of active layer of sediment of the road cross\
+                section",
+        },
+        "active__mass_fines": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of fine sediment in the active layer",
+        },
+        "active__mass_coarse": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of coarse sediment in the active layer",
         },
         "ballast__depth": {
             "dtype": float,
@@ -62,21 +87,45 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of ballast layer of the road cross section",
         },
-        "ballast__fines": {
+        "ballast__depth_fines": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of fine sediment in the ballast layer",
         },
-        "ballast__coarse": {
+        "ballast__depth_coarse": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of coarse sediment in the ballast layer",
+        },
+        "ballast__mass": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of ballast layer of the road cross section",
+        },
+        "ballast__mass_fines": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of fine sediment in the ballast layer",
+        },
+        "ballast__mass_coarse": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of coarse sediment in the ballast layer",
         },
         "sediment__added": {
             "dtype": float,
@@ -94,21 +143,45 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of surfacing layer of the road cross section",
         },
-        "surfacing__fines": {
+        "surfacing__depth_fines": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of fine sediment in the surfacing layer",
         },
-        "surfacing__coarse": {
+        "surfacing__depth_coarse": {
             "dtype": float,
-            "intent": "out",
+            "intent": "inout",
             "optional": False,
             "units": "m",
             "mapping": "node",
             "doc": "depth of coarse sediment in the surfacing layer",
+        },
+        "surfacing__mass": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of surfacing layer of the road cross section",
+        },
+        "surfacing__mass_fines": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of fine sediment in the surfacing layer",
+        },
+        "surfacing__mass_coarse": {
+            "dtype": float,
+            "intent": "inout",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of coarse sediment in the surfacing layer",
         },
         "topographic__elevation": {
             "dtype": float,
@@ -131,12 +204,6 @@ class TruckPassErosion(Component):
         u_pb = 2.3e-6, #current best guess
         k_cs = 6e-7, #current best guess
         k_cb = 2e-7, #current best guess
-        f_af = 0.50,
-        f_ac = 0.50,
-        f_sf = 0.275,
-        f_sc = 0.725,
-        f_bf = 0.20,
-        f_bc = 0.80,
         scat_loss = 8e-5, #current best gues
     ):
         """Initialize TruckPassErosion.
@@ -160,28 +227,16 @@ class TruckPassErosion(Component):
         truck_num : int
             Average number of trucks to pass over a road segment in a day
         u_ps : float
-            Pumping rate from surfacing to active layer per truck pass [m/truck]
+            Pumping rate from surfacing to active layer per truck pass [kg/truck]
         u_pb : float
-            Pumping rate from ballast to surfacing per truck pass [m/truck]
+            Pumping rate from ballast to surfacing per truck pass [kg/truck]
         k_cs : float
-            Crushing rate per truck pass in the surfacing [m/truck]
+            Crushing rate per truck pass in the surfacing [kg/truck]
         k_cb : float
-            Crushing rate per truck pass in the ballast [m/truck]
-        f_af : float
-            Fraction of fine material in the active layer [-]
-        f_ac : float
-            Fraction of coarse material in the active layer [-]
-        f_sf : float
-            Fraction of fine material in the surfacing [-]
-        f_sc : float
-            Fraction of coarse material in the surfacing [-]
-        f_bf : float
-            Fraction of fine material in the ballast [-]
-        f_bc : float
-            Fraction of coarse material in the ballast [-]
+            Crushing rate per truck pass in the ballast [kg/truck]
         scat_loss : float
             Total amount of coarse material being scattered in the active layer
-            per truck pass [m]
+            per truck pass [kg/truck]
         """
 
         super().__init__(grid)
@@ -192,23 +247,34 @@ class TruckPassErosion(Component):
         self._u_pb = u_pb
         self._k_cs = k_cs
         self._k_cb = k_cb
-
-        self._f_af = f_af 
-        self._f_ac = f_ac
-        self._f_sf = f_sf
-        self._f_sc = f_sc
-        self._f_bf = f_bf
-        self._f_bc = f_bc
-
         self._scat_loss = scat_loss
+
         self._centerline = centerline
         self._half_width = half_width
         self._full_tire = full_tire
         
-        # Get layers for sediment depths
-        self._active_depth = grid.at_node["active__depth"]
-        self._surfacing_depth = grid.at_node["surfacing__depth"]
-        self._ballast_depth = grid.at_node["ballast__depth"]
+        # Get initial total sediment depth (storage)  
+        # and the depth of fines/coarse  material for each layer
+        self._Sa = grid.at_node["active__depth"]
+        self._Saf = grid.at_node["active__depth_fines"]
+        self._Sac = grid.at_node["active__depth_coarse"]
+        self._Ss = grid.at_node["surfacing__depth"]
+        self._Ssf = grid.at_node["surfacing__depth_fines"]
+        self._Ssc = grid.at_node["surfacing__depth_coarse"]
+        self._Sb = grid.at_node["ballast__depth"]
+        self._Sbf = grid.at_node["ballast__depth_fines"]
+        self._Sbc = grid.at_node["ballast__depth_coarse"]
+
+        # Get initial sediment mass for each layer
+        self._Ma = grid.at_node['active__mass']
+        self._Maf = grid.at_node["active__mass_fines"]
+        self._Mac = grid.at_node["active__mass_coarse"]
+        self._Ms = grid.at_node['surfacing__mass']
+        self._Msf = grid.at_node["surfacing__mass_fines"]
+        self._Msc = grid.at_node["surfacing__mass_coarse"]
+        self._Mb = grid.at_node['ballast__mass']
+        self._Mbf = grid.at_node["ballast__mass_fines"]
+        self._Mbc = grid.at_node["ballast__mass_coarse"]
 
         # Get elevation fields
         self._topographic_elev = grid.at_node['topographic__elevation']
@@ -239,22 +305,9 @@ class TruckPassErosion(Component):
         # Get average number of trucks per day
         self._truck_num_avg = truck_num
 
+        # Initialize output fields
         self.initialize_output_fields()
-        self._sed_added = grid.at_node["sediment__added"]
-        self._active_fine = grid.at_node['active__fines']
-        self._active_coarse = grid.at_node['active__coarse']
-        self._surf_fine = grid.at_node['surfacing__fines']
-        self._surf_coarse = grid.at_node['surfacing__coarse']
-        self._ball_fine = grid.at_node['ballast__fines']
-        self._ball_coarse = grid.at_node['ballast__coarse']
-        
-        # Initialize each of the fraction depths
-        self._active_fine += self._active_depth*self._f_af
-        self._active_coarse += self._active_depth*self._f_ac
-        self._surf_fine += self._surfacing_depth*self._f_sf
-        self._surf_coarse += self._surfacing_depth*self._f_sc
-        self._ball_fine += self._ballast_depth*self._f_bf
-        self._ball_coarse += self._ballast_depth*self._f_bc	
+        self._sed_added = grid.at_node["sediment__added"]	
 
     @property
     def sed_added(self):
@@ -338,9 +391,6 @@ class TruckPassErosion(Component):
         self._surf_init = self._surfacing_depth.copy()
         self._ball_init = self._ballast_depth.copy()
         self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
-        # self.truck_num = self._truck_num_avg
-        # edited out line above and replaced with truck_num = set truck number 
-        # so that the same number of trucks are run each time
         
         if self.truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
@@ -352,144 +402,127 @@ class TruckPassErosion(Component):
                 if self._full_tire == False:
 
                     for i in range(len(self.tire_tracks[0])):
-                        if self._active_coarse[self.tire_tracks[0][i]] <= self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] > self._scat_loss:   
+                        if self._Mac[self.tire_tracks[0][i]] <= self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] > self._scat_loss:   
 
-                            self._active_coarse[self.tire_tracks[2][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])*3/4
-                            self._active_coarse[self.tire_tracks[4][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])*1/4
-                            self._active_coarse[self.tire_tracks[0][i]] -= \
-                                self._active_coarse[self.tire_tracks[0][i]]
-                            self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss*3/4
-                            self._active_coarse[self.tire_tracks[5][i]] += self._scat_loss*1/4
-                            self._active_coarse[self.tire_tracks[1][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[2][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])*3/4
+                            self._Mac[self.tire_tracks[4][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])*1/4
+                            self._Mac[self.tire_tracks[0][i]] -= \
+                                self._Mac[self.tire_tracks[0][i]]
+                            self._Mac[self.tire_tracks[3][i]] += self._scat_loss*3/4
+                            self._Mac[self.tire_tracks[5][i]] += self._scat_loss*1/4
+                            self._Mac[self.tire_tracks[1][i]] -= self._scat_loss
 
-                        elif self._active_coarse[self.tire_tracks[0][i]] > self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] <= self._scat_loss: 
+                        elif self._Mac[self.tire_tracks[0][i]] > self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] <= self._scat_loss: 
 
-                            self._active_coarse[self.tire_tracks[2][i]] += self._scat_loss*3/4
-                            self._active_coarse[self.tire_tracks[4][i]] += self._scat_loss*1/4
-                            self._active_coarse[self.tire_tracks[0][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[3][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])*3/4
-                            self._active_coarse[self.tire_tracks[5][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])*1/4
-                            self._active_coarse[self.tire_tracks[1][i]] -= \
-                                 self._active_coarse[self.tire_tracks[1][i]]
+                            self._Mac[self.tire_tracks[2][i]] += self._scat_loss*3/4
+                            self._Mac[self.tire_tracks[4][i]] += self._scat_loss*1/4
+                            self._Mac[self.tire_tracks[0][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[3][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])*3/4
+                            self._Mac[self.tire_tracks[5][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])*1/4
+                            self._Mac[self.tire_tracks[1][i]] -= \
+                                 self._Mac[self.tire_tracks[1][i]]
 
-                        elif self._active_coarse[self.tire_tracks[0][i]] <= self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] <= self._scat_loss:
+                        elif self._Mac[self.tire_tracks[0][i]] <= self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] <= self._scat_loss:
 
-                            self._active_coarse[self.tire_tracks[2][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])*3/4
-                            self._active_coarse[self.tire_tracks[3][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])*3/4
-                            self._active_coarse[self.tire_tracks[4][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])*1/4
-                            self._active_coarse[self.tire_tracks[5][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])*1/4
-                            self._active_coarse[self.tire_tracks[0][i]] -= \
-                                self._active_coarse[self.tire_tracks[0][i]]
-                            self._active_coarse[self.tire_tracks[1][i]] -= \
-                                self._active_coarse[self.tire_tracks[1][i]]
+                            self._Mac[self.tire_tracks[2][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])*3/4
+                            self._Mac[self.tire_tracks[3][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])*3/4
+                            self._Mac[self.tire_tracks[4][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])*1/4
+                            self._Mac[self.tire_tracks[5][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])*1/4
+                            self._Mac[self.tire_tracks[0][i]] -= \
+                                self._Mac[self.tire_tracks[0][i]]
+                            self._Mac[self.tire_tracks[1][i]] -= \
+                                self._Mac[self.tire_tracks[1][i]]
                         else:
-                            self._active_coarse[self.tire_tracks[0][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[1][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[2][i]] += self._scat_loss*3/4
-                            self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss*3/4
-                            self._active_coarse[self.tire_tracks[4][i]] += self._scat_loss*1/4
-                            self._active_coarse[self.tire_tracks[5][i]] += self._scat_loss*1/4
-
-
-                    #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surfacing_depth/self._surfacing_depth)
-                    self._q_pb = self._u_pb*(self._ballast_depth/self._ballast_depth)
-
-                    #calculate crushing fluxes
-                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing_depth)
-                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast_depth)
-
-                    #update surfacing
-                    self._surf_coarse[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
-                    self._surf_fine[self.tire_tracks[0:2]] += self._q_cs[self.tire_tracks[0:2]] - \
-                        self._q_ps[self.tire_tracks[0:2]] + self._q_pb[self.tire_tracks[0:2]]
-
-                    #update ballast
-                    self._ball_coarse[self.tire_tracks[0:2]] -= self._q_cb[self.tire_tracks[0:2]]
-                    self._ball_fine[self.tire_tracks[0:2]] += self._q_cb[self.tire_tracks[0:2]] - \
-                        self._q_pb[self.tire_tracks[0:2]]
-
-                    #update fines in active layer         
-                    self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
-                    self._active_fine[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
+                            self._Mac[self.tire_tracks[0][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[1][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[2][i]] += self._scat_loss*3/4
+                            self._Mac[self.tire_tracks[3][i]] += self._scat_loss*3/4
+                            self._Mac[self.tire_tracks[4][i]] += self._scat_loss*1/4
+                            self._Mac[self.tire_tracks[5][i]] += self._scat_loss*1/4
                 
                 elif self._full_tire == True:
 
                     for i in range(len(self.tire_tracks[0])):
                         
-                        if self._active_coarse[self.tire_tracks[0][i]] <= self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] > self._scat_loss:   
+                        if self._Mac[self.tire_tracks[0][i]] <= self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] > self._scat_loss:   
 
-                            self._active_coarse[self.tire_tracks[2][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])
-                            self._active_coarse[self.tire_tracks[0][i]] -= \
-                                self._active_coarse[self.tire_tracks[0][i]]
-                            self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss
-                            self._active_coarse[self.tire_tracks[1][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[2][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])
+                            self._Mac[self.tire_tracks[0][i]] -= \
+                                self._Mac[self.tire_tracks[0][i]]
+                            self._Mac[self.tire_tracks[3][i]] += self._scat_loss
+                            self._Mac[self.tire_tracks[1][i]] -= self._scat_loss
 
-                        elif self._active_coarse[self.tire_tracks[0][i]] > self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] <= self._scat_loss: 
+                        elif self._Mac[self.tire_tracks[0][i]] > self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] <= self._scat_loss: 
 
-                            self._active_coarse[self.tire_tracks[2][i]] += self._scat_loss
-                            self._active_coarse[self.tire_tracks[0][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[3][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])
-                            self._active_coarse[self.tire_tracks[1][i]] -= \
-                                 self._active_coarse[self.tire_tracks[1][i]]
+                            self._Mac[self.tire_tracks[2][i]] += self._scat_loss
+                            self._Mac[self.tire_tracks[0][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[3][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])
+                            self._Mac[self.tire_tracks[1][i]] -= \
+                                 self._Mac[self.tire_tracks[1][i]]
 
-                        elif self._active_coarse[self.tire_tracks[0][i]] <= self._scat_loss and\
-                            self._active_coarse[self.tire_tracks[1][i]] <= self._scat_loss:
+                        elif self._Mac[self.tire_tracks[0][i]] <= self._scat_loss and\
+                            self._Mac[self.tire_tracks[1][i]] <= self._scat_loss:
 
-                            self._active_coarse[self.tire_tracks[2][i]] += \
-                                (self._active_coarse[self.tire_tracks[0][i]])
-                            self._active_coarse[self.tire_tracks[3][i]] += \
-                                (self._active_coarse[self.tire_tracks[1][i]])
-                            self._active_coarse[self.tire_tracks[0][i]] -= \
-                                self._active_coarse[self.tire_tracks[0][i]]
-                            self._active_coarse[self.tire_tracks[1][i]] -= \
-                                self._active_coarse[self.tire_tracks[1][i]]
+                            self._Mac[self.tire_tracks[2][i]] += \
+                                (self._Mac[self.tire_tracks[0][i]])
+                            self._Mac[self.tire_tracks[3][i]] += \
+                                (self._Mac[self.tire_tracks[1][i]])
+                            self._Mac[self.tire_tracks[0][i]] -= \
+                                self._Mac[self.tire_tracks[0][i]]
+                            self._Mac[self.tire_tracks[1][i]] -= \
+                                self._Mac[self.tire_tracks[1][i]]
                         else:
-                            self._active_coarse[self.tire_tracks[0][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[1][i]] -= self._scat_loss
-                            self._active_coarse[self.tire_tracks[2][i]] += self._scat_loss
-                            self._active_coarse[self.tire_tracks[3][i]] += self._scat_loss
+                            self._Mac[self.tire_tracks[0][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[1][i]] -= self._scat_loss
+                            self._Mac[self.tire_tracks[2][i]] += self._scat_loss
+                            self._Mac[self.tire_tracks[3][i]] += self._scat_loss
 
-                    #calculate pumping fluxes
-                    self._q_ps = self._u_ps*(self._surfacing_depth/self._surfacing_depth)
-                    self._q_pb = self._u_pb*(self._ballast_depth/self._ballast_depth)
 
-                    #calculate crushing fluxes
-                    self._q_cs = self._k_cs*(self._surf_coarse/self._surfacing_depth)
-                    self._q_cb = self._k_cb*(self._ball_coarse/self._ballast_depth)
+                area = self.grid.area_of_cell[self.grid.cell_at_node]
 
-                    #update surfacing
-                    self._surf_coarse[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
-                    self._surf_fine[self.tire_tracks[0:2]] += self._q_cs[self.tire_tracks[0:2]] - \
-                        self._q_ps[self.tire_tracks[0:2]] + self._q_pb[self.tire_tracks[0:2]]
+                self._Sac = self._Mac/((1-self._porosity)*rho_s*area)
+                
+                #Pumping fluxes (this is per truck pass)
+                self._q_ps = self._u_ps
+                self._q_pb = self._u_pb
 
-                    #update ballast
-                    self._ball_coarse[self.tire_tracks[0:2]] -= self._q_cb[self.tire_tracks[0:2]]
-                    self._ball_fine[self.tire_tracks[0:2]] += self._q_cb[self.tire_tracks[0:2]] - \
-                        self._q_pb[self.tire_tracks[0:2]]
+                #Crushing fluxes
+                self._q_cs = self._k_cs*(self._Msc/self._Ms)
+                self._q_cb = self._k_cb*(self._Mbc/self._Mb)
 
-                    self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
-                    self._active_fine[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
+                #update surfacing
+                self._Msc[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
+                self._Msf[self.tire_tracks[0:2]] += self._q_cs[self.tire_tracks[0:2]] - \
+                    self._q_ps[self.tire_tracks[0:2]] + self._q_pb[self.tire_tracks[0:2]]
+
+                #update ballast
+                self._Mbc[self.tire_tracks[0:2]] -= self._q_cb[self.tire_tracks[0:2]]
+                self._Mbf[self.tire_tracks[0:2]] += self._q_cb[self.tire_tracks[0:2]] - \
+                    self._q_pb[self.tire_tracks[0:2]]
+
+                #update fines in active layer         
+                # self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
+                self._Maf[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
 
         #update outputs
         self._ballast_depth += ((self._ball_coarse + self._ball_fine) - self._ball_init)
         self._surfacing_depth += ((self._surf_coarse + self._surf_fine) - self._surf_init)
-        self._active_depth += ((self._active_coarse + self._active_fine) - self._active_init)
+        self._active_depth += ((self._Mac + self._active_fine) - self._active_init)
         
         self._ballast_elev += (
             self._ballast_depth - self._ball_init
