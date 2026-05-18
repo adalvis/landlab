@@ -54,15 +54,6 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of coarse sediment in the active layer",
         },
-        "active__mass": {
-            "dtype": float,
-            "intent": "inout",
-            "optional": False,
-            "units": "kg",
-            "mapping": "node",
-            "doc": "mass of active layer of sediment of the road cross\
-                section",
-        },
         "active__mass_fines": {
             "dtype": float,
             "intent": "inout",
@@ -102,14 +93,6 @@ class TruckPassErosion(Component):
             "units": "m",
             "mapping": "node",
             "doc": "depth of coarse sediment in the ballast layer",
-        },
-        "ballast__mass": {
-            "dtype": float,
-            "intent": "inout",
-            "optional": False,
-            "units": "kg",
-            "mapping": "node",
-            "doc": "mass of ballast layer of the road cross section",
         },
         "ballast__mass_fines": {
             "dtype": float,
@@ -159,14 +142,6 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of coarse sediment in the surfacing layer",
         },
-        "surfacing__mass": {
-            "dtype": float,
-            "intent": "inout",
-            "optional": False,
-            "units": "kg",
-            "mapping": "node",
-            "doc": "mass of surfacing layer of the road cross section",
-        },
         "surfacing__mass_fines": {
             "dtype": float,
             "intent": "inout",
@@ -200,6 +175,8 @@ class TruckPassErosion(Component):
         half_width,
         full_tire,
         truck_num = 5,
+        rho_s = 2650, #kg/m^3
+        porosity = 0.35,
         u_ps = 6.3e-6, #(10.3g/m2) converted to depth
         u_pb = 2.3e-6, #current best guess
         k_cs = 6e-7, #current best guess
@@ -243,6 +220,8 @@ class TruckPassErosion(Component):
 
         # Store grid and parameters
         self._grid = grid
+        self._rho_s = rho_s
+        self._phi = porosity
         self._u_ps = u_ps
         self._u_pb = u_pb
         self._k_cs = k_cs
@@ -265,14 +244,11 @@ class TruckPassErosion(Component):
         self._Sbf = grid.at_node["ballast__depth_fines"]
         self._Sbc = grid.at_node["ballast__depth_coarse"]
 
-        # Get initial sediment mass for each layer
-        self._Ma = grid.at_node['active__mass']
+        # Get initial sediment mass for each fraction in every layer
         self._Maf = grid.at_node["active__mass_fines"]
         self._Mac = grid.at_node["active__mass_coarse"]
-        self._Ms = grid.at_node['surfacing__mass']
         self._Msf = grid.at_node["surfacing__mass_fines"]
         self._Msc = grid.at_node["surfacing__mass_coarse"]
-        self._Mb = grid.at_node['ballast__mass']
         self._Mbf = grid.at_node["ballast__mass_fines"]
         self._Mbc = grid.at_node["ballast__mass_coarse"]
 
@@ -492,10 +468,12 @@ class TruckPassErosion(Component):
                             self._Mac[self.tire_tracks[2][i]] += self._scat_loss
                             self._Mac[self.tire_tracks[3][i]] += self._scat_loss
 
-
                 area = self.grid.area_of_cell[self.grid.cell_at_node]
 
-                self._Sac = self._Mac/((1-self._porosity)*rho_s*area)
+                self._Sac[:] = self._Mac/((1-self._phi)*self._rho_s*area)
+
+                Maf_crit = self._phi*(1-self._phi)*self._Sac*self._rho_s*area
+
                 
                 #Pumping fluxes (this is per truck pass)
                 self._q_ps = self._u_ps
