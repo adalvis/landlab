@@ -92,7 +92,7 @@ class OverlandFlowTransporter(Component):
             "doc": "Depth of active layer of sediment of the road cross\
                 section",
         },
-        "active__fines": {
+        "active__depth_fines": {
             "dtype": float,
             "intent": "inout",
             "optional": False,
@@ -100,7 +100,7 @@ class OverlandFlowTransporter(Component):
             "mapping": "node",
             "doc": "Depth of fine sediment in the active layer",
         },
-        "active__coarse": {
+        "active__depth_coarse": {
             "dtype": float,
             "intent": "inout",
             "optional": False,
@@ -108,30 +108,30 @@ class OverlandFlowTransporter(Component):
             "mapping": "node",
             "doc": "Depth of coarse sediment in the active layer",
         },
-        "surfacing__depth": {
+        "active__mass": {
             "dtype": float,
             "intent": "inout",
             "optional": False,
-            "units": "m",
+            "units": "kg",
             "mapping": "node",
-            "doc": "Depth of surfacing layer of sediment of the road cross\
+            "doc": "Mass of active layer of sediment of the road cross\
                 section",
         },
-        "surfacing__fines": {
+        "active__mass_fines": {
             "dtype": float,
             "intent": "inout",
             "optional": False,
-            "units": "m",
+            "units": "kg",
             "mapping": "node",
-            "doc": "Depth of fine sediment in the surfacing layer",
+            "doc": "Mass of fine sediment in the active layer",
         },
-        "surfacing__coarse": {
+        "active__mass_coarse": {
             "dtype": float,
             "intent": "inout",
             "optional": False,
-            "units": "m",
+            "units": "kg",
             "mapping": "node",
-            "doc": "Depth of coarse sediment in the surfacing layer",
+            "doc": "Mass of coarse sediment in the active layer",
         },
         "grain__roughness": {
             "dtype": float,
@@ -213,9 +213,10 @@ class OverlandFlowTransporter(Component):
         """
 
         super().__init__(grid)
-
+        self._area = grid.dx*grid.dy
+        
         # Parameters
-        self._porosity = porosity
+        self._phi_f = porosity
         self._n_c = n_c
         self._n_f_ini = n_f
         self._rho_w = rho_w
@@ -230,38 +231,14 @@ class OverlandFlowTransporter(Component):
         self._discharge = grid.at_node["surface_water__discharge"]
         self._slope = grid.at_node["topographic__steepest_slope"]
         self._receiver_node = grid.at_node["flow__receiver_node"]
-        self._active_depth = grid.at_node["active__depth"]
-        self._active_fines = grid.at_node["active__fines"]
-        self._active_coarse = grid.at_node["active__coarse"]
-        self._surfacing_depth = grid.at_node["surfacing__depth"]
-        self._surfacing_fines = grid.at_node["surfacing__fines"]
-        self._surfacing_coarse = grid.at_node["surfacing__coarse"]
+        self._Sa = grid.at_node["active__depth"]
+        self._Saf = grid.at_node["active__depth_fines"]
+        self._Sac = grid.at_node["active__depth_coarse"]
+        self._Ma = grid.at_node["active__mass"]
+        self._Maf = grid.at_node["active__mass_fines"]
+        self._Mac = grid.at_node["active__mass_coarse"]
         self._road_flag = grid.at_node["flag"]
         
-
-        if "ballast__elevation" in grid.at_node:
-            self._ballast_elev = grid.at_node["ballast__elevation"]
-        else:
-            self._ballast_elev = grid.add_zeros(
-                "ballast__elevation", at="node", dtype=float
-            )
-
-            self._ballast_elev[:] = (
-                self._topographic_elev - self._active_depth \
-                - self._surfacing_depth
-            )
-        
-        if "surfacing__elevation" in grid.at_node:
-            self._surfacing_elev = grid.at_node["surfacing__elevation"]
-        else:
-            self._surfacing_elev = grid.add_zeros(
-                "surfacing__elevation", at="node", dtype=float
-            )
-
-            self._surfacing_elev[:] = (
-                self._topographic_elev - self._active_depth
-            )
-
         super().initialize_output_fields()
         self._f_s = grid.at_node["shear_stress__partitioning"]
         self._n_f = grid.at_node["grain__roughness"]
@@ -283,16 +260,13 @@ class OverlandFlowTransporter(Component):
 
         for i in range(len(self._unit_discharge)):
             if self._unit_discharge[i] > 0:
-                if self._road_flag[i] == 1:
-                    self._n_f[i] = self._n_f_ini
-                    if (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] > 0):
-                        self._n_t[i] = self._n_c + (self._active_fines[i] / self._active_depth[i]) \
-                            * (self._n_f[i] - self._n_c)
-                    elif (self._active_fines[i] <= self._active_coarse[i]) and (self._active_fines[i] <= 0):
-                        self._n_t[i] = self._n_c
-                    else:
-                        self._n_t[i] = self._n_f[i]
-                    self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
+                self._n_f[i] = self._n_f_ini
+                if self._Saf[i] <= self._Sac[i]:
+                    self._n_t[i] = self._n_c + (self._Maf[i] / self._Ma[i]) \
+                        * (self._n_f[i] - self._n_c)
+                else:
+                    self._n_t[i] = self._n_f[i]
+                self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
             else:
                 self._n_f[i] = 0
                 self._n_t[i] = 0
@@ -366,7 +340,7 @@ class OverlandFlowTransporter(Component):
        
         for i in range(len(self._transport_capacity)):
             self._sediment_outflux[i] = min(
-                self._transport_capacity[i], ((self._active_fines[i])     
+                self._transport_capacity[i], ((self._Saf[i])     
                 * area[i] / (dt*86400))
                 )
 
@@ -377,20 +351,20 @@ class OverlandFlowTransporter(Component):
 
         self._dzdt[cores] = (
             self._sediment_influx[cores] - self._sediment_outflux[cores]
-            ) / (area[cores] * (1 - self._porosity))
+            ) / (area[cores] * (1 - self._phi_f))
         
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
-        self._active_fines_init = self._active_fines.copy()
-        self._surfacing_fines_init = self._surfacing_fines.copy()
+        self._Saf_init = self._Saf.copy()
 
         self.calc_overland_sediment_rate_of_change(dt)
         
-        self._active_fines += self._dzdt*dt*86400
+        self._Saf += self._dzdt*dt*86400
 
-        self._active_depth += (self._active_fines - self._active_fines_init)
+        self._Sa[:] = np.maximum(self._d95, self._Saf)
+        # self._Sa[:] = self._Ma/((1-self._phi_f)*self._rho_s*self._area)
 
-        self._topographic_elev[:] = (
-            self._ballast_elev[:] + self._surfacing_depth[:] + self._active_depth[:]
+        self._topographic_elev += (
+            self._Saf - self._Saf_init
         )
