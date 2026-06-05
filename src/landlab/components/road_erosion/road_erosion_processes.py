@@ -46,6 +46,14 @@ class TruckPassErosion(Component):
             "mapping": "node",
             "doc": "depth of fine sediment in the active layer",
         },
+        "active__depth_coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "m",
+            "mapping": "node",
+            "doc": "depth of coarse sediment in the active layer",
+        },
         "active__mass": {
             "dtype": float,
             "intent": "out",
@@ -61,6 +69,14 @@ class TruckPassErosion(Component):
             "units": "kg",
             "mapping": "node",
             "doc": "mass of fine sediment in the active layer",
+        },
+        "active__mass_coarse": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of coarse sediment in the active layer",
         },
         "ballast__depth": {
             "dtype": float,
@@ -200,7 +216,7 @@ class TruckPassErosion(Component):
         k_cb = 2e-7, #current best guess
         scat_loss = 8e-5, #current best guess,
         d95 = 0.019,
-        F_af0 = 0.99, #initial fraction of fines in interstitial spaces of coarse in active layer
+        F_af0 = 0.5, #initial fraction of fines in interstitial spaces of coarse in active layer
         F_sf0 = 1,
         F_bc0 = 0.5,
     ):
@@ -299,6 +315,7 @@ class TruckPassErosion(Component):
         self._sed_added = grid.at_node["sediment__added"]
 
         self._Saf = grid.at_node["active__depth_fines"]
+        self._Sac = grid.at_node["active__depth_coarse"]
         self._Ssf = grid.at_node["surfacing__depth_fines"]
         self._Ssc = grid.at_node["surfacing__depth_coarse"]
         self._Sbf = grid.at_node["ballast__depth_fines"]
@@ -306,6 +323,7 @@ class TruckPassErosion(Component):
 
         self._Ma = grid.at_node["active__mass"]
         self._Maf = grid.at_node["active__mass_fines"]
+        self._Mac = grid.at_node["active__mass_coarse"]
         self._Ms = grid.at_node["surfacing__mass"]
         self._Msf = grid.at_node["surfacing__mass_fines"]
         self._Msc = grid.at_node["surfacing__mass_coarse"]
@@ -313,14 +331,16 @@ class TruckPassErosion(Component):
         self._Mbf = grid.at_node["ballast__mass_fines"]
         self._Mbc = grid.at_node["ballast__mass_coarse"]
 
-        self._Saf[:] = self._F_af0*self._d95
+        self._Sac[:] = self._d95
+        self._Saf[:] = self._F_af0*self._Sac
         self._Ssc[:] = self._Ss.copy()
         self._Ssf[:] = self._F_sf0*self._Ssc
         self._Sbf[:] = self._Sb.copy()
         self._Sbc[:] = self._F_bc0*self._Sbf
 
         self._Maf[:] = self._Saf*(1-self._phi_f)*self._rho_s*self._area*self._phi_c
-        self._Ma[:] = (self._d95*(1-self._phi_c)*self._rho_s*self._area) + self._Maf
+        self._Mac[:] = self._Sac*(1-self._phi_c)*self._rho_s*self._area
+        self._Ma[:] = self._Mac + self._Maf
         self._Msc[:] = self._Ssc*(1-self._phi_c)*self._rho_s*self._area
         self._Msf[:] = self._Ssf*(1-self._phi_f)*self._rho_s*self._area*self._phi_c
         self._Ms[:] = self._Msf + self._Msc
@@ -369,13 +389,13 @@ class TruckPassErosion(Component):
             self._out_left_close = [self._out_center_close[0]-1, self._out_center_close[1]-1]
             self._out_left_far = [self._out_center_far[0]-1, self._out_center_far[1]-1]
             
-            val = rnd.choice([self._center_tracks[0], self._right_tracks[0],\
-                self._left_tracks[0]])
+            val = np.random.choice(["center", "right",\
+                "left"])
 
-            if all(val == self._center_tracks[0]):
+            if val == "center":
                 self._tracks = [self._center_tracks[0], self._center_tracks[1], self._out_center_close[0],\
                     self._out_center_close[1], self._out_center_far[0], self._out_center_far[1]]
-            elif all(val == self._right_tracks[0]):
+            elif val == "right":
                 self._tracks = [self._right_tracks[0], self._right_tracks[1], self._out_right_close[0],\
                     self._out_right_close[1], self._out_right_far[0], self._out_right_far[1]]    
             else:
@@ -392,9 +412,9 @@ class TruckPassErosion(Component):
             self._left_tracks = [self._right_tracks[0]-1, self._right_tracks[1]-1]
             self._out_left = [self._out_right[0]-1, self._out_right[1]-1]
 
-            val = rnd.choice([self._right_tracks[0], self._left_tracks[0]])
+            val = np.random.choice(["right", "left"])
 
-            if all(val == self._right_tracks[0]):
+            if val == "right":
                 self._tracks = [self._right_tracks[0], self._right_tracks[1], self._out_right[0],\
                     self._out_right[1]]    
             else:
@@ -417,6 +437,7 @@ class TruckPassErosion(Component):
         self._Mb_init = self._Mb.copy()
         self._Sb_init = self._Sb.copy()
         self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
+        # self.truck_num=4
         
         if self.truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
@@ -424,27 +445,19 @@ class TruckPassErosion(Component):
         else:
             for _ in range(self.truck_num):
                 self.tire_tracks = self.calc_tire_tracks() 
-
-                #Scattering flux
-                for i in range(len(self._Saf)):
-                    if self._Saf[i] < self._d95:
-                        self._q_scat_f = self._scat_loss*(1-self._Maf[i]/self._Ma[i])*\
-                            (1-self._phi_f)*self._phi_c*self._rho_s*self._area
-                        self._q_scat_c = self._scat_loss*(1-self._Maf[i]/self._Ma[i])*\
-                            (1-self._phi_c)*self._rho_s*self._area
-                    else:
-                        self._q_scat = 0
-                
-                #Pumping fluxes (this is per truck pass)
-                self._q_ps = self._u_ps*np.ones(len(self._Ms))
-                self._q_pb = self._u_pb*np.ones(len(self._Mb))
-
-                #Crushing fluxes
-                self._q_cs = self._k_cs*(self._Msc/self._Ms)
-                self._q_cb = self._k_cb*(self._Mbc/self._Mb)
-
                 if self._full_tire == False:
                     for i in range(len(self.tire_tracks[0:2])):
+                    
+                        #Scattering flux
+                        if self._Saf[i] <= self._Sac[i]:
+                            self._q_scat_f = self._scat_loss*(1 - self._Saf[i]/self._Sac[i])*\
+                                (1-self._phi_f)*self._phi_c*self._rho_s*self._area
+                            self._q_scat_c = self._scat_loss*(1 - self._Saf[i]/self._Sac[i])*\
+                                (1-self._phi_c)*self._rho_s*self._area
+                        else:
+                            self._q_scat_f = 0
+                            self._q_scat_c = 0
+
                         self._Msc[self.tire_tracks[2:4][i]] += \
                             self._q_scat_c*3/4
                         self._Msc[self.tire_tracks[4:][i]] += \
@@ -452,24 +465,43 @@ class TruckPassErosion(Component):
                         self._Msc[self.tire_tracks[0:2][i]] -= \
                             self._q_scat_c
 
-                        self._Msf[self.tire_tracks[2:4][i]] += \
-                            self._q_scat_f*3/4
-                        self._Msf[self.tire_tracks[4:][i]] += \
-                            self._q_scat_f*1/4
                         self._Msf[self.tire_tracks[0:2][i]] -= \
                             self._q_scat_f
 
+                        self._Maf[self.tire_tracks[0:2][i]] += \
+                            self._q_scat_f
+                        
+                        
                 elif self._full_tire == True:
                     for i in range(len(self.tire_tracks[0])):
+                        #Scattering flux
+                        if self._Saf[i] <= self._Sac[i]:
+                            self._q_scat_f = self._scat_loss*(1 - self._Saf[i]/self._Sac[i])*\
+                                (1-self._phi_f)*self._phi_c*self._rho_s*self._area
+                            self._q_scat_c = self._scat_loss*(1 - self._Saf[i]/self._Sac[i])*\
+                                (1-self._phi_c)*self._rho_s*self._area
+                        else:
+                            self._q_scat_f = 0
+                            self._q_scat_c = 0
+
                         self._Msc[self.tire_tracks[2:4][i]] += \
                             self._q_scat_c
                         self._Msc[self.tire_tracks[0:2][i]] -= \
                             self._q_scat_c
 
-                        self._Msf[self.tire_tracks[2:4][i]] += \
-                            self._q_scat_f
                         self._Msf[self.tire_tracks[0:2][i]] -= \
                             self._q_scat_f
+
+                        self._Maf[self.tire_tracks[0:2][i]] += \
+                            self._q_scat_f
+
+                #Pumping fluxes (this is per truck pass)
+                self._q_ps = self._u_ps*np.ones(len(self._Ms))
+                self._q_pb = self._u_pb*np.ones(len(self._Mb))
+
+                #Crushing fluxes
+                self._q_cs = self._k_cs*(self._Msc/self._Ms)
+                self._q_cb = self._k_cb*(self._Mbc/self._Mb)
 
                 #update surfacing post-scatter
                 self._Msc[self.tire_tracks[0:2]] -= self._q_cs[self.tire_tracks[0:2]]
