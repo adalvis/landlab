@@ -188,7 +188,8 @@ class OverlandFlowTransporter(Component):
         d50=2e-4, # this is so small, originally d50 = 1.8e-5
         tau_c=0.178,
         porosity = 0.35,
-        longitudinal_slope = 0.125
+        longitudinal_slope = 0.125,
+        d95=0.019,
     ):
         """Initialize OverlandFlowTransporter.
         
@@ -225,6 +226,7 @@ class OverlandFlowTransporter(Component):
         self._d50 = d50
         self._tau_c = tau_c
         self._longitudinal_slope = longitudinal_slope
+        self._d95 = d95
         
         # Fields and arrays
         self._topographic_elev = grid.at_node["topographic__elevation"]
@@ -247,7 +249,7 @@ class OverlandFlowTransporter(Component):
         self._transport_capacity = grid.at_node["transport__capacity"]
         self._sediment_influx = grid.at_node["sediment__volume_influx"]
         self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
-        self._dzdt = grid.at_node["sediment__rate_of_change"]
+        self._dmdt = grid.at_node["sediment__rate_of_change"]
 
     @property
     def shear_stress(self):
@@ -287,7 +289,7 @@ class OverlandFlowTransporter(Component):
 
         # loop over nodes (safe computation)
         for i in range(len(self._slope)):
-            if (self._unit_discharge[i] > 0) and (self._road_flag[i] == 1):
+            if self._unit_discharge[i] > 0:
                 safe_denom = np.sqrt(self._slope_safe[i])
                 raw = (self._n_t[i] * self._unit_discharge[i]) / safe_denom
 
@@ -321,9 +323,9 @@ class OverlandFlowTransporter(Component):
             if self._shear_stress[i] >= self._tau_c:
                 self._transport_capacity[i] = (
                     ((10**(-4.348))
-                    / (self._rho_s*((self._d50)**(0.811))))
+                    / ((self._d50)**(0.811)))
                     * (self._shear_stress[i]-self._tau_c)**(2.457)
-                ) * self.grid.dx #[m^3/s]
+                ) * self.grid.dx #[kg/s]
             else:
                 self._transport_capacity[i] = 0.0
 
@@ -332,7 +334,7 @@ class OverlandFlowTransporter(Component):
 
 # original calc_overland_sediment_rate_of_change with minor edits
     def calc_overland_sediment_rate_of_change(self, dt):
-        """Update the rate of thickness change of sediment at each core node.
+        """Update the rate of mass change of sediment at each core node.
         """
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
@@ -340,8 +342,8 @@ class OverlandFlowTransporter(Component):
        
         for i in range(len(self._transport_capacity)):
             self._sediment_outflux[i] = min(
-                self._transport_capacity[i], ((self._Saf[i])     
-                * area[i] / (dt*86400))
+                self._transport_capacity[i], ((self._Maf[i])
+                 / (dt*86400))
                 )
 
         self._sediment_influx[:] = 0.0
@@ -349,22 +351,30 @@ class OverlandFlowTransporter(Component):
             r = self._receiver_node[c]
             self._sediment_influx[r] += self._sediment_outflux[c]
 
-        self._dzdt[cores] = (
+        self._dmdt[cores] = (
             self._sediment_influx[cores] - self._sediment_outflux[cores]
-            ) / (area[cores] * (1 - self._phi_f))
+            )
         
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
-        self._Saf_init = self._Saf.copy()
+        self._Sa_init = self._Sa.copy()
 
         self.calc_overland_sediment_rate_of_change(dt)
         
-        self._Saf += self._dzdt*dt*86400
+        self._Maf += self._dmdt*dt*86400
 
-        self._Sa[:] = np.maximum(self._d95, self._Saf)
-        # self._Sa[:] = self._Ma/((1-self._phi_f)*self._rho_s*self._area)
+        Maf_crit = self._phi_f*self._d95*(1-self._phi_f)*self._rho_s*self._area
+                
+        for i in range(len(self._Maf)):
+            if self._Maf[i] <= Maf_crit:
+                self._Saf[i] = self._Maf[i]/(self._phi_f*(1-self._phi_f)*self._rho_s*self._area)
+            elif self._Maf[i] > Maf_crit:
+                self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
+                    + self._d95*((1-self._phi_f)/(1-self._phi_f)))*(1/(self._phi_f + 1))
+
+        self._Sa[:] = np.maximum(self._Sac, self._Saf)
 
         self._topographic_elev += (
-            self._Saf - self._Saf_init
+            self._Sa - self._Sa_init
         )
