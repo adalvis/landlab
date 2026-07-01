@@ -1,7 +1,7 @@
 """Landlab component for calculating shallow overland flow
 sediment transport using Govers' equation (1992)
 
-Last updated:  September 19, 2025
+Last updated:  July 01, 2026
 
 .. codeauthor: Amanda Alvis
 """
@@ -27,7 +27,7 @@ class OverlandFlowTransporter(Component):
     _unit_agnostic = True
 
     _info = {
-        "sediment__volume_influx": {
+        "sediment__mass_influx": {
             "dtype": float,
             "intent": "out",
             "optional": False,
@@ -35,7 +35,7 @@ class OverlandFlowTransporter(Component):
             "mapping": "node",
             "doc": "Volumetric incoming streamwise sediment transport rate",
         },
-        "sediment__volume_outflux": {
+        "sediment__mass_outflux": {
             "dtype": float,
             "intent": "out",
             "optional": False,
@@ -247,8 +247,8 @@ class OverlandFlowTransporter(Component):
         self._n_t = grid.at_node["total__roughness"]
         self._water_depth = grid.at_node["water__depth"]
         self._transport_capacity = grid.at_node["transport__capacity"]
-        self._sediment_influx = grid.at_node["sediment__volume_influx"]
-        self._sediment_outflux = grid.at_node["sediment__volume_outflux"]
+        self._sediment_influx = grid.at_node["sediment__mass_influx"]
+        self._sediment_outflux = grid.at_node["sediment__mass_outflux"]
         self._dmdt = grid.at_node["sediment__rate_of_change"]
 
     @property
@@ -279,10 +279,7 @@ class OverlandFlowTransporter(Component):
         self.calc_overland_roughness()
 
         slope_eps = 1e-8  # prevents divide-by-zero in sqrt(slope)
-        self._slope_safe = np.maximum(self._slope, slope_eps)
-
-        # adding a upper limit of 3x the initial longitudinal slope as a temporary measure since slope is exploding
-        self._slope_safe[:] = np.minimum(self._slope_safe, self._longitudinal_slope*3)    
+        self._slope_safe = np.maximum(self._slope, slope_eps)   
 
         # initialize depth array to zero
         self._water_depth[:] = 0.0
@@ -332,18 +329,16 @@ class OverlandFlowTransporter(Component):
         self._transport_capacity[~np.isfinite(self._transport_capacity)] = 0.0
         self._transport_capacity[:] = np.maximum(self._transport_capacity, 0.0)
 
-# original calc_overland_sediment_rate_of_change with minor edits
     def calc_overland_sediment_rate_of_change(self, dt):
         """Update the rate of mass change of sediment at each core node.
         """
         self.calc_overland_transport_capacity()
         cores = self.grid.core_nodes
-        area = self.grid.area_of_cell[self.grid.cell_at_node]
        
         for i in range(len(self._transport_capacity)):
             self._sediment_outflux[i] = min(
-                self._transport_capacity[i], ((self._Maf[i])
-                 / (dt*86400))
+                self._transport_capacity[i], 
+                (self._Maf[i] / (dt*86400))
                 )
 
         self._sediment_influx[:] = 0.0
@@ -358,11 +353,12 @@ class OverlandFlowTransporter(Component):
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
+        self._dt = dt
         self._Sa_init = self._Sa.copy()
 
-        self.calc_overland_sediment_rate_of_change(dt)
+        self.calc_overland_sediment_rate_of_change(self._dt)
         
-        self._Maf += self._dmdt*dt*86400
+        self._Maf += self._dmdt*self._dt*86400
 
         Maf_crit = self._phi_f*self._d95*(1-self._phi_f)*self._rho_s*self._area
                 
@@ -371,7 +367,7 @@ class OverlandFlowTransporter(Component):
                 self._Saf[i] = self._Maf[i]/(self._phi_f*(1-self._phi_f)*self._rho_s*self._area)
             elif self._Maf[i] > Maf_crit:
                 self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                    + self._d95*((1-self._phi_f)/(1-self._phi_f)))*(1/(self._phi_f + 1))
+                    + self._d95)*(1/(self._phi_f + 1))
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
 
