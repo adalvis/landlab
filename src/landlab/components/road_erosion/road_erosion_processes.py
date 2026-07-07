@@ -263,8 +263,8 @@ class TruckPassErosion(Component):
         self._phi_f = porosity_f
         self._u_ps = self._phi_c*u_ps*(1-self._phi_f)*self._rho_s*self._area
         self._u_pb = self._phi_c*u_pb*(1-self._phi_f)*self._rho_s*self._area
-        self._k_cs = k_cs*(1-self._phi_c)*self._rho_s*self._area
-        self._k_cb = k_cb*(1-self._phi_c)*self._rho_s*self._area
+        self._k_cs = self._phi_c*k_cs*(1-self._phi_f)*self._rho_s*self._area
+        self._k_cb = self._phi_c*k_cb*(1-self._phi_f)*self._rho_s*self._area
         self._scat_loss = scat_loss
         self._d95 = d95
         self._F_af0 = F_af0
@@ -568,7 +568,7 @@ class TruckPassErosion(Component):
                         self._Saf[i] = self._Maf[i]/(self._phi_c*(1-self._phi_f)*self._rho_s*self._area)
                     elif self._Maf[i] > Maf_crit:
                         self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                            + self._d95)*(1/(self._phi_c + 1))
+                            + self._d95*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
                         
 
                 self._Ssc[:] = self._Msc/((1-self._phi_c)*self._rho_s*self._area)
@@ -578,16 +578,16 @@ class TruckPassErosion(Component):
                         self._Ssf[i] = self._Msf[i]/(self._phi_c*(1-self._phi_f)*self._rho_s*self._area)
                     else:
                         self._Ssf[i] = (self._Msf[i]/((1-self._phi_f)*self._rho_s*self._area) \
-                            + self._Ssc[i])*(1/(self._phi_c + 1))
+                            + self._Ssc[i]*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
 
-                self._Sbf[:] = self._Mbf/((1-self._phi_c)*self._rho_s*self._area)
-                Mbc_crit = self._phi_c*self._Sbf*(1-self._phi_f)*self._rho_s*self._area
+                self._Sbf[:] = self._Mbf/((1-self._phi_f)*self._rho_s*self._area)
+                Mbc_crit = self._phi_f*self._Sbf*(1-self._phi_c)*self._rho_s*self._area
                 for i in range(len(self._Mbc)):
                     if self._Mbc[i] <= Mbc_crit[i]:
                         self._Sbc[i] = self._Mbc[i]/(self._phi_f*(1-self._phi_c)*self._rho_s*self._area)
                     else:
                         self._Sbc[i] = (self._Mbc[i]/((1-self._phi_c)*self._rho_s*self._area) \
-                            + self._Sbf[i])*(1/(self._phi_f + 1))
+                            + self._Sbf[i]*((1-self._phi_f)/(1-self._phi_c)))*(1/(self._phi_f + 1))
 
         #update outputs
         self._Mb[:] = self._Mbf + self._Mbc
