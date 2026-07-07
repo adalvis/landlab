@@ -187,7 +187,8 @@ class OverlandFlowTransporter(Component):
         g=9.81,
         d50=2e-4, # this is so small, originally d50 = 1.8e-5
         tau_c=0.178,
-        porosity = 0.35,
+        porosity_f = 0.35,
+        porosity_c = 0.35,
         longitudinal_slope = 0.125,
         d95=0.019,
     ):
@@ -217,7 +218,8 @@ class OverlandFlowTransporter(Component):
         self._area = grid.dx*grid.dy
         
         # Parameters
-        self._phi_f = porosity
+        self._phi_f = porosity_f
+        self._phi_c = porosity_c
         self._n_c = n_c
         self._n_f_ini = n_f
         self._rho_w = rho_w
@@ -367,7 +369,7 @@ class OverlandFlowTransporter(Component):
                 self._Saf[i] = self._Maf[i]/(self._phi_f*(1-self._phi_f)*self._rho_s*self._area)
             elif self._Maf[i] > Maf_crit:
                 self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                    + self._d95)*(1/(self._phi_f + 1))
+                    + self._d95*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
 
