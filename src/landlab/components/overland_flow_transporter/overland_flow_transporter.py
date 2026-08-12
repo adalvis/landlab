@@ -218,8 +218,6 @@ class OverlandFlowTransporter(Component):
         self._area = grid.dx*grid.dy
         
         # Parameters
-        self._phi_f = porosity_f
-        self._phi_c = porosity_c
         self._n_c = n_c
         self._n_f = n_f
         self._rho_w = rho_w
@@ -243,6 +241,22 @@ class OverlandFlowTransporter(Component):
         self._Maf = grid.at_node["active__mass_fines"]
         self._Mac = grid.at_node["active__mass_coarse"]
         self._road_flag = grid.at_node["flag"]
+
+        if "phi_c_a" in grid.at_node:
+            self._phi_c_a = grid.at_node["phi_c_a"]
+        else:
+            self._phi_c_a = grid.add_zeros(
+                "phi_c_a", at="node", dtype=float
+            )
+            self._phi_c_a *= porosity_c
+        
+        if "phi_f_a" in grid.at_node:
+            self._phi_f_a = grid.at_node["phi_f_a"]
+        else:
+            self._phi_f_a = grid.add_zeros(
+                "phi_f_a", at="node", dtype=float
+            )
+            self._phi_f_a *= porosity_f
         
         super().initialize_output_fields()
         self._f_s = grid.at_node["shear_stress__partitioning"]
@@ -396,13 +410,15 @@ class OverlandFlowTransporter(Component):
             K = 10**(-4.348) / (self._rho_s * self._d50**0.811)
             A = self._rho_w * self._g * self._slope_safe[node_id]**0.7 *\
                 self._unit_discharge[node_id]**0.6 * self._n_f**1.5
-            denom = self._phi_c*self._Sac[node_id]*(1-self._phi_f)*self._rho_s*self._area
-            phi = Maf[node_id] / denom if denom != 0 else 0.0
-            nt = self._n_c + phi*(self._n_f - self._n_c) \
-                if self._Saf[node_id] < self._Sac[node_id] else self._n_f
-            
-            # print(nt)
-            
+            Mc = self._phi_c_a[node_id]*self._Sac[node_id]*(1-self._phi_f_a[node_id])*self._rho_s*self._area
+            zed = Maf[node_id] / Mc
+            # nt = np.array([self._n_c + zed*(self._n_f - self._n_c) \
+            #     if self._Saf[node_id] < self._Sac[node_id] else self._n_f])
+            if Maf[node_id] <= Mc:
+                nt = self._n_c + zed*(self._n_f - self._n_c) 
+            else:
+                nt = self._n_f
+
             self._shear_stress[node_id] = A * nt**(-0.9)
             excess = self._shear_stress[node_id] - self._tau_c
             E = K * excess**2.457 if excess > 0.0 else 0.0
@@ -492,6 +508,11 @@ class OverlandFlowTransporter(Component):
             self._Maf_plot.append(self._Maf[40])
             self._t_plot.append(t)
 
+            self._Maf[self.grid.nodes[0,0:33]] -= self._sediment_influx[self.grid.nodes[0,0:33]]*self._step_dt
+            # # self._Maf[self.grid.nodes[1:,0]] -= self._sediment_influx[self.grid.nodes[1:,0]]*self._step_dt
+            # # self._Maf[self.grid.nodes[1:,63]] -= self._sediment_influx[self.grid.nodes[1:,63]]*self._step_dt
+            self._Maf[self.grid.nodes[0,33:64]] -= self._sediment_influx[self.grid.nodes[0,33:64]]*self._step_dt
+
             # M_new, dt_used, dt_new, accepted = self.adaptive_step(self._Maf, self._step_dt)
 
             # if accepted:
@@ -505,14 +526,14 @@ class OverlandFlowTransporter(Component):
             # if self._step_dt < dt_min:
             #     raise RuntimeError("Step size underflow: problem may be too stiff.")
 
-        Maf_crit = self._phi_c*self._d95*(1-self._phi_f)*self._rho_s*self._area
+        Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 
         for i in range(len(self._Maf)):
-            if self._Maf[i] <= Maf_crit:
-                self._Saf[i] = self._Maf[i]/(self._phi_f*(1-self._phi_f)*self._rho_s*self._area)
-            elif self._Maf[i] > Maf_crit:
-                self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                    + self._d95*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
+            if self._Maf[i] <= Maf_crit[i]:
+                self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
+            elif self._Maf[i] > Maf_crit[i]:
+                self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
+                    + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
 
