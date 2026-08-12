@@ -215,6 +215,7 @@ class TruckPassErosion(Component):
         k_cs = 6e-7, #current best guess
         k_cb = 2e-7, #current best guess
         scat_loss = 8e-5, #current best guess,
+        compression = 7e-4, #current best guess,
         d95 = 0.019,
         F_af0 = 0.5, #initial fraction of fines in interstitial spaces of coarse in active layer
         F_sf0 = 1,
@@ -251,6 +252,8 @@ class TruckPassErosion(Component):
         scat_loss : float
             Total amount of coarse material being scattered in the active layer
             per truck pass [kg/truck]
+        compression : float
+            Amount by which the soil porosity decreases [-/truck]
         """
 
         super().__init__(grid)
@@ -259,17 +262,54 @@ class TruckPassErosion(Component):
         # Store grid and parameters
         self._grid = grid
         self._rho_s = rho_s
-        self._phi_c = porosity_c
-        self._phi_f = porosity_f
-        self._u_ps = self._phi_c*u_ps*(1-self._phi_f)*self._rho_s*self._area
-        self._u_pb = self._phi_c*u_pb*(1-self._phi_f)*self._rho_s*self._area
-        self._k_cs = self._phi_c*k_cs*(1-self._phi_f)*self._rho_s*self._area
-        self._k_cb = self._phi_c*k_cb*(1-self._phi_f)*self._rho_s*self._area
         self._scat_loss = scat_loss
+        self._comp = compression
         self._d95 = d95
         self._F_af0 = F_af0
         self._F_sf0 = F_sf0
         self._F_bc0 = F_bc0
+
+        #Get porosity as fields for each layer
+        if "phi_c_a" in grid.at_node:
+            self._phi_c_a = grid.at_node["phi_c_a"]
+        else:
+            self._phi_c_a = grid.add_ones("phi_c_a", at="node", dtype=float)
+            self._phi_c_a *= porosity_c
+        
+        if "phi_f_a" in grid.at_node:
+            self._phi_f_a = grid.at_node["phi_f_a"]
+        else:
+            self._phi_f_a = grid.add_ones("phi_f_a", at="node", dtype=float)
+            self._phi_f_a *= porosity_f
+
+        if "phi_c_s" in grid.at_node:
+            self._phi_c_s = grid.at_node["phi_c_s"]
+        else:
+            self._phi_c_s = grid.add_ones("phi_c_s", at="node", dtype=float)
+            self._phi_c_s *= porosity_c
+        
+        if "phi_f_s" in grid.at_node:
+            self._phi_f_s = grid.at_node["phi_f_s"]
+        else:
+            self._phi_f_s = grid.add_ones("phi_f_s", at="node", dtype=float)
+            self._phi_f_s *= porosity_f
+
+        if "phi_c_b" in grid.at_node:
+            self._phi_c_b = grid.at_node["phi_c_b"]
+        else:
+            self._phi_c_b = grid.add_ones("phi_c_b", at="node", dtype=float)
+            self._phi_c_b *= porosity_c
+
+        if "phi_f_b" in grid.at_node:
+            self._phi_f_b = grid.at_node["phi_f_b"]
+        else:
+            self._phi_f_b = grid.add_ones("phi_f_b", at="node", dtype=float)
+            self._phi_f_b *= porosity_f
+
+        self._u_ps = self._phi_c_s*u_ps*(1-self._phi_f_s)*self._rho_s*self._area
+        self._u_pb = self._phi_c_b*u_pb*(1-self._phi_f_b)*self._rho_s*self._area
+        self._k_cs = self._phi_c_s*k_cs*(1-self._phi_f_s)*self._rho_s*self._area
+        self._k_cb = self._phi_c_b*k_cb*(1-self._phi_f_b)*self._rho_s*self._area
 
         self._centerline = centerline
         self._half_width = half_width
@@ -290,7 +330,6 @@ class TruckPassErosion(Component):
             self._ballast_elev = grid.add_zeros(
                 "ballast__elevation", at="node", dtype=float
             )
-
             self._ballast_elev[:] = (
                 self._topographic_elev - self._Sa \
                 - self._Ss
@@ -302,7 +341,6 @@ class TruckPassErosion(Component):
             self._surfacing_elev = grid.add_zeros(
                 "surfacing__elevation", at="node", dtype=float
             )
-
             self._surfacing_elev[:] = (
                 self._topographic_elev - self._Sa
             )
@@ -333,17 +371,17 @@ class TruckPassErosion(Component):
             self._Mac = grid.add_zeros(
                 "active__mass_coarse", at="node", dtype=float
             )
-            self._Mac[:] = self._Sac*(1-self._phi_c)*self._rho_s*self._area
+            self._Mac[:] = self._Sac*(1-self._phi_c_a)*self._rho_s*self._area
 
         if "active__mass_fines" in grid.at_node:
             self._Maf = grid.at_node["active__mass_fines"]
-            Maf_crit = self._phi_c*self._d95*(1-self._phi_f)*self._rho_s*self._area
+            Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
             for i in range(len(self._Maf)):
-                if self._Maf[i] <= Maf_crit:
-                    self._Saf[i] = self._Maf[i]/(self._phi_c*(1-self._phi_f)*self._rho_s*self._area)
+                if self._Maf[i] <= Maf_crit[i]:
+                    self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
                 elif self._Maf[i] > Maf_crit:
-                    self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                        + self._d95*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
+                    self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
+                        + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
             self._Sa[:] = np.maximum(self._Sac, self._Saf)
         else:
             self._Maf = grid.add_zeros(
@@ -351,7 +389,7 @@ class TruckPassErosion(Component):
             )
             self._Saf[:] = self._F_af0*self._Sac
             self._Sa[:] = np.maximum(self._Sac, self._Saf)
-            self._Maf[:] = self._Saf[:]*(1-self._phi_f)*self._rho_s*self._area*self._phi_c
+            self._Maf[:] = self._Saf[:]*(1-self._phi_f_a[:])*self._rho_s*self._area*self._phi_c_a[:]
 
         # Initialize output fields
         self.initialize_output_fields()
@@ -376,11 +414,11 @@ class TruckPassErosion(Component):
         self._Sbc[:] = self._F_bc0*self._Sbf
 
         self._Ma[:] = self._Mac + self._Maf
-        self._Msc[:] = self._Ssc*(1-self._phi_c)*self._rho_s*self._area
-        self._Msf[:] = self._Ssf*(1-self._phi_f)*self._rho_s*self._area*self._phi_c
+        self._Msc[:] = self._Ssc*(1-self._phi_c_s)*self._rho_s*self._area
+        self._Msf[:] = self._Ssf*(1-self._phi_f_s)*self._rho_s*self._area*self._phi_c_s
         self._Ms[:] = self._Msf + self._Msc
-        self._Mbc[:] = self._Sbc*(1-self._phi_c)*self._rho_s*self._area*self._phi_f
-        self._Mbf[:] = self._Sbf*(1-self._phi_f)*self._rho_s*self._area
+        self._Mbc[:] = self._Sbc*(1-self._phi_c_b)*self._rho_s*self._area*self._phi_f_b
+        self._Mbf[:] = self._Sbf*(1-self._phi_f_b)*self._rho_s*self._area
         self._Mb[:] = self._Mbf + self._Mbc
 
     @property
@@ -471,8 +509,8 @@ class TruckPassErosion(Component):
         self._Ss_init = self._Ss.copy()
         self._Mb_init = self._Mb.copy()
         self._Sb_init = self._Sb.copy()
-        self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
-        # self.truck_num=4
+        # self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
+        self.truck_num=4
         
         if self.truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
@@ -483,7 +521,7 @@ class TruckPassErosion(Component):
                 if self._full_tire == False:
                     for i in range(len(self.tire_tracks[0:2])):
                     
-                        #Scattering flux
+                        
                         # for k in range(len(self.tire_tracks[0:2][i])):
                         #     if self._Saf[self.tire_tracks[0:2][i][k]] <= self._Sac[self.tire_tracks[0:2][i][k]]:
                         #         self._q_scat_f = self._scat_loss*\
@@ -498,11 +536,12 @@ class TruckPassErosion(Component):
                         #         self._q_scat_f = 0
                         #         self._q_scat_c = 0
 
+                        #Scattering flux + compression
                         #Use list comprehension to speed things up a little
                         self._q_scat_c = np.array([self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
                                         self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_c)*self._rho_s*self._area \
+                                        (1-self._phi_c_a[self.tire_tracks[0:2][i][k]])*self._rho_s*self._area \
                                         if self._Saf[self.tire_tracks[0:2][i][k]] \
                                         <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
                                         for k in range(len(self.tire_tracks[0:2][i]))\
@@ -510,11 +549,17 @@ class TruckPassErosion(Component):
                         self._q_scat_f = np.array([self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
                                         self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_f)*self._phi_c*self._rho_s*self._area \
+                                        (1-self._phi_f_a[self.tire_tracks[0:2][i][k]])*\
+                                        self._phi_c_a[self.tire_tracks[0:2][i][k]]*self._rho_s*self._area \
                                         if self._Saf[self.tire_tracks[0:2][i][k]] \
                                         <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
                                         for k in range(len(self.tire_tracks[0:2][i]))\
                                         ])
+
+                        self._phi_c_s[self.tire_tracks[0:2][i]] -= self._comp
+                        self._phi_f_s[self.tire_tracks[0:2][i]] -= self._comp
+                        self._phi_c_a[self.tire_tracks[0:2][i]] -= self._comp
+                        self._phi_f_a[self.tire_tracks[0:2][i]] -= self._comp
 
                         self._Msc[self.tire_tracks[2:4][i]] += \
                             self._q_scat_c*3/4
@@ -537,7 +582,7 @@ class TruckPassErosion(Component):
                         self._q_scat_c = np.array([self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
                                         self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_c)*self._rho_s*self._area \
+                                        (1-self._phi_c[self.tire_tracks[0:2][i][k]])*self._rho_s*self._area \
                                         if self._Saf[self.tire_tracks[0:2][i][k]] \
                                         <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
                                         for k in range(len(self.tire_tracks[0:2][i]))\
@@ -545,7 +590,8 @@ class TruckPassErosion(Component):
                         self._q_scat_f = np.array([self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
                                         self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_f)*self._phi_c*self._rho_s*self._area \
+                                        (1-self._phi_f[self.tire_tracks[0:2][i][k]])*\
+                                        self._phi_c[self.tire_tracks[0:2][i][k]]*self._rho_s*self._area \
                                         if self._Saf[self.tire_tracks[0:2][i][k]] \
                                         <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
                                         for k in range(len(self.tire_tracks[0:2][i]))\
@@ -588,32 +634,32 @@ class TruckPassErosion(Component):
                 self._Maf[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]\
                     # +self._q_cs[self.tire_tracks[0:2]]
                 
-                Maf_crit = self._phi_c*self._d95*(1-self._phi_f)*self._rho_s*self._area
+                Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 for i in range(len(self._Maf)):
-                    if self._Maf[i] <= Maf_crit:
-                        self._Saf[i] = self._Maf[i]/(self._phi_c*(1-self._phi_f)*self._rho_s*self._area)
-                    elif self._Maf[i] > Maf_crit:
-                        self._Saf[i] = (self._Maf[i]/((1-self._phi_f)*self._rho_s*self._area)\
-                            + self._d95*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
+                    if self._Maf[i] <= Maf_crit[i]:
+                        self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
+                    elif self._Maf[i] > Maf_crit[i]:
+                        self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
+                            + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
                         
 
-                self._Ssc[:] = self._Msc/((1-self._phi_c)*self._rho_s*self._area)
-                Msf_crit = self._phi_c*self._Ssc*(1-self._phi_f)*self._rho_s*self._area
+                self._Ssc[:] = self._Msc/((1-self._phi_c_s)*self._rho_s*self._area)
+                Msf_crit = self._phi_c_s*self._Ssc*(1-self._phi_f_s)*self._rho_s*self._area
                 for i in range(len(self._Msf)):
                     if self._Msf[i] <= Msf_crit[i]:
-                        self._Ssf[i] = self._Msf[i]/(self._phi_c*(1-self._phi_f)*self._rho_s*self._area)
+                        self._Ssf[i] = self._Msf[i]/(self._phi_c_s[i]*(1-self._phi_f_s[i])*self._rho_s*self._area)
                     else:
-                        self._Ssf[i] = (self._Msf[i]/((1-self._phi_f)*self._rho_s*self._area) \
-                            + self._Ssc[i]*((1-self._phi_c)/(1-self._phi_f)))*(1/(self._phi_c + 1))
+                        self._Ssf[i] = (self._Msf[i]/((1-self._phi_f_s[i])*self._rho_s*self._area) \
+                            + self._Ssc[i]*((1-self._phi_c_s[i])/(1-self._phi_f_s[i])))*(1/(self._phi_c_s[i] + 1))
 
-                self._Sbf[:] = self._Mbf/((1-self._phi_f)*self._rho_s*self._area)
-                Mbc_crit = self._phi_f*self._Sbf*(1-self._phi_c)*self._rho_s*self._area
+                self._Sbf[:] = self._Mbf/((1-self._phi_f_b)*self._rho_s*self._area)
+                Mbc_crit = self._phi_f_b*self._Sbf*(1-self._phi_c_b)*self._rho_s*self._area
                 for i in range(len(self._Mbc)):
                     if self._Mbc[i] <= Mbc_crit[i]:
-                        self._Sbc[i] = self._Mbc[i]/(self._phi_f*(1-self._phi_c)*self._rho_s*self._area)
+                        self._Sbc[i] = self._Mbc[i]/(self._phi_f_b[i]*(1-self._phi_c_b[i])*self._rho_s*self._area)
                     else:
-                        self._Sbc[i] = (self._Mbc[i]/((1-self._phi_c)*self._rho_s*self._area) \
-                            + self._Sbf[i]*((1-self._phi_f)/(1-self._phi_c)))*(1/(self._phi_f + 1))
+                        self._Sbc[i] = (self._Mbc[i]/((1-self._phi_c_b[i])*self._rho_s*self._area) \
+                            + self._Sbf[i]*((1-self._phi_f_b[i])/(1-self._phi_c_b[i])))*(1/(self._phi_f_b[i] + 1))
 
         #update outputs
         self._Mb[:] = self._Mbf + self._Mbc
