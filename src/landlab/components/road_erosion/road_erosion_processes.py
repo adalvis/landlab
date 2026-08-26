@@ -138,9 +138,27 @@ class TruckPassErosion(Component):
             "dtype": float,
             "intent": "out",
             "optional": False,
-            "units": "m",
+            "units": "kg",
             "mapping": "node",
-            "doc": "depth of fine sediment added to active layer",
+            "doc": "mass of fine sediment added to active layer",
+        },
+        "sediment__pumped": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of fine sediment made available in active layer\
+                    due to pumping",
+        },
+        "sediment__scattered": {
+            "dtype": float,
+            "intent": "out",
+            "optional": False,
+            "units": "kg",
+            "mapping": "node",
+            "doc": "mass of fine sediment made available in active layer\
+                    due to scattering",
         },
         "surfacing__depth": {
             "dtype": float,
@@ -394,6 +412,8 @@ class TruckPassErosion(Component):
         # Initialize output fields
         self.initialize_output_fields()
         self._sed_added = grid.at_node["sediment__added"]
+        self._sed_scat = grid.at_node["sediment__scattered"]
+        self._sed_pump = grid.at_node["sediment__pumped"]
 
         self._Ssf = grid.at_node["surfacing__depth_fines"]
         self._Ssc = grid.at_node["surfacing__depth_coarse"]
@@ -423,9 +443,21 @@ class TruckPassErosion(Component):
 
     @property
     def sed_added(self):
-        """The depth of fine sediment added to the active layer at
+        """The mass of fine sediment added to the active layer at
         each node"""
         return self._sed_added
+    
+    @property
+    def sed_scattered(self):
+        """The mass of fine sediment made available in the active layer at
+        each node due to scattering"""
+        return self._sed_scat
+    
+    @property
+    def sed_pumped(self):
+        """The mass of fine sediment added to the active layer at
+        each node due to pumping"""
+        return self._sed_pump
 
     def calc_tire_tracks(self):
         #Grab center location of road if given a node, else use the array given
@@ -574,6 +606,8 @@ class TruckPassErosion(Component):
                             self._q_scat_f
                         self._sed_added[self.tire_tracks[0:2][i]] += \
                             self._q_scat_f
+                        self._sed_scat[self.tire_tracks[0:2][i]] += \
+                            self._q_scat_f
                         
                         
                 elif self._full_tire == True:
@@ -608,6 +642,8 @@ class TruckPassErosion(Component):
                             self._q_scat_f
                         self._sed_added[self.tire_tracks[0:2][i]] += \
                             self._q_scat_f
+                        self._sed_scat[self.tire_tracks[0:2][i]] += \
+                            self._q_scat_f
 
                 #Pumping fluxes (this is per truck pass)
                 self._q_ps = self._u_ps*np.ones(len(self._Ms))
@@ -631,6 +667,7 @@ class TruckPassErosion(Component):
                 #update fines in active layer         
                 self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]\
                     # + self._q_cs[self.tire_tracks[0:2]]
+                self._sed_pump[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
                 self._Maf[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]\
                     # +self._q_cs[self.tire_tracks[0:2]]
                 
