@@ -510,7 +510,7 @@ class TruckPassErosion(Component):
         self._Mb_init = self._Mb.copy()
         self._Sb_init = self._Sb.copy()
         # self.truck_num = np.random.poisson(self._truck_num_avg,1).item()
-        self.truck_num=4
+        self.truck_num = self._truck_num_avg
         
         if self.truck_num == 0:
             self.tire_tracks = self.calc_tire_tracks()
