@@ -7,6 +7,7 @@ Last updated:  July 01, 2026
 """
 
 from landlab import Component
+from landlab.components import FlowAccumulator
 import numpy as np
 
 class OverlandFlowTransporter(Component):
@@ -191,6 +192,7 @@ class OverlandFlowTransporter(Component):
         porosity_c = 0.35,
         longitudinal_slope = 0.125,
         d95=0.019,
+        flow_accumulator=None,
     ):
         """Initialize OverlandFlowTransporter.
         
@@ -227,6 +229,7 @@ class OverlandFlowTransporter(Component):
         self._tau_c = tau_c
         self._longitudinal_slope = longitudinal_slope
         self._d95 = d95
+        self._fa = flow_accumulator
         
         # Fields and arrays
         self._topographic_elev = grid.at_node["topographic__elevation"]
@@ -274,7 +277,12 @@ class OverlandFlowTransporter(Component):
     def shear_stress(self):
         """The shear stress at each node"""
         return self._shear_stress
-              
+
+    @property
+    def mannings_n(self):
+        """Manning's roughness at each node"""
+        return self._n_t
+ #%%       
     # def calc_overland_roughness(self):
     #     """Calculate overland flow surface roughness and shear stress partitioning ratio."""
     #     self._unit_discharge = self._discharge / self.grid.dx
@@ -386,11 +394,13 @@ class OverlandFlowTransporter(Component):
         # self._dmdt[cores] = (
         #     self._sediment_influx[cores] - self._sediment_outflux[cores]
         #     )
-    
+#%%
     ## ======================================================
     ## Calculate differential
     ## ======================================================
     def dmdt(self, Maf, dt):
+        z_init = self._topographic_elev.copy()
+
         # Define unit discharge for calculations
         self._unit_discharge = self._discharge / self.grid.dx
 
@@ -403,29 +413,50 @@ class OverlandFlowTransporter(Component):
         
         self._sediment_influx[:] = 0
 
+        Mc = self._phi_c_a*self._Sac*(1-self._phi_f_a)*self._rho_s*self._area
+        zed = Maf / Mc
+
+        (greater_than_Mc,) = np.where(Maf > Mc)
+        (less_than_Mc,) = np.where(Maf <= Mc)
+
+        self._n_t[greater_than_Mc] = self._n_f
+        self._n_t[less_than_Mc] = self._n_c + zed[less_than_Mc]*(self._n_f - self._n_c) 
+
+        y_d8 = ((self._n_t * self._unit_discharge) / np.sqrt(self._slope_safe)) ** (3/5)
+
+        z_eff = z_init + y_d8
+        self._topographic_elev[:] = z_eff
+
+        self._fa.run_one_step()
+        Q_flood = self.grid.at_node['surface_water__discharge'].copy()
+        q_flood = Q_flood/self.grid.dx
+
+        S_flood = np.maximum(self.grid.at_node['topographic__steepest_slope'], slope_min)
+        # y_flood = ((self._n_t * q_flood) / np.sqrt(S_flood)) ** (3/5)
+
+        ## Step 3: Restore z
+        self._topographic_elev[:] = z_init
+
+        K = 10**(-4.348) / (self._rho_s * self._d50**0.811)
+        A = self._rho_w * self._g * S_flood**0.7 *\
+            q_flood**0.6 * self._n_f**1.5
+
+        self._shear_stress = A * self._n_t**(-0.9)
+        excess = self._shear_stress - self._tau_c
+
+        (excess_more_0,) = np.where(excess > 0.0)
+        (excess_less_0,) = np.where(excess <= 0.0)
+
+        E = np.zeros(len(excess))
+        E[excess_more_0] = K * excess[excess_more_0]**2.457
+        E[excess_less_0] = 0.0
+        avail = Maf / dt + self._sediment_influx
+
         for i in range(n_nodes):
             node_id = stack_flip_ud[i]
 
-            # Lump some parameters together to make code neater
-            K = 10**(-4.348) / (self._rho_s * self._d50**0.811)
-            A = self._rho_w * self._g * self._slope_safe[node_id]**0.7 *\
-                self._unit_discharge[node_id]**0.6 * self._n_f**1.5
-            Mc = self._phi_c_a[node_id]*self._Sac[node_id]*(1-self._phi_f_a[node_id])*self._rho_s*self._area
-            zed = Maf[node_id] / Mc
-            # nt = np.array([self._n_c + zed*(self._n_f - self._n_c) \
-            #     if self._Saf[node_id] < self._Sac[node_id] else self._n_f])
-            if Maf[node_id] <= Mc:
-                nt = self._n_c + zed*(self._n_f - self._n_c) 
-            else:
-                nt = self._n_f
-
-            self._shear_stress[node_id] = A * nt**(-0.9)
-            excess = self._shear_stress[node_id] - self._tau_c
-            E = K * excess**2.457 if excess > 0.0 else 0.0
-            avail = Maf[node_id] / dt + self._sediment_influx[node_id]
-
             if (self._unit_discharge[node_id] > 0) and (self._receiver_node[node_id] != node_id):
-                self._sediment_outflux[node_id] = min(E, avail)
+                self._sediment_outflux[node_id] = min(E[node_id], avail[node_id])
                 self._sediment_influx[self._receiver_node[node_id]] += self._sediment_outflux[node_id]
             else:
                 self._sediment_outflux[node_id] = 0
@@ -492,7 +523,7 @@ class OverlandFlowTransporter(Component):
         ## ======================================================
         ## ADAPTIVE INTEGRATION LOOP
         ## ======================================================
-        dt_init = 3000 #sec
+        dt_init = 5000 #sec
         dt_min  = 500
         
         t = 0
@@ -528,12 +559,15 @@ class OverlandFlowTransporter(Component):
 
         Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 
-        for i in range(len(self._Maf)):
-            if self._Maf[i] <= Maf_crit[i]:
-                self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
-            elif self._Maf[i] > Maf_crit[i]:
-                self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
-                    + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
+        (greater_than_Maf_crit,) = np.where(self._Maf > Maf_crit)
+        (less_than_Maf_crit,) = np.where(self._Maf <= Maf_crit)
+
+        self._Saf[less_than_Maf_crit] = self._Maf[less_than_Maf_crit]/\
+            (self._phi_c_a[less_than_Maf_crit]*(1-self._phi_f_a[less_than_Maf_crit])*self._rho_s*self._area)
+        self._Saf[greater_than_Maf_crit] = (self._Maf[greater_than_Maf_crit]/\
+            ((1-self._phi_f_a[greater_than_Maf_crit])*self._rho_s*self._area)\
+            + self._d95*((1-self._phi_c_a[greater_than_Maf_crit])/\
+            (1-self._phi_f_a[greater_than_Maf_crit])))*(1/(self._phi_c_a[greater_than_Maf_crit] + 1))
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
 
