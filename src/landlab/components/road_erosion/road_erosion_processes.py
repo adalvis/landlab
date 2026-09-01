@@ -394,12 +394,17 @@ class TruckPassErosion(Component):
         if "active__mass_fines" in grid.at_node:
             self._Maf = grid.at_node["active__mass_fines"]
             Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
-            for i in range(len(self._Maf)):
-                if self._Maf[i] <= Maf_crit[i]:
-                    self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
-                elif self._Maf[i] > Maf_crit:
-                    self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
-                        + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
+
+            (greater_than_Maf_crit,) = np.where(self._Maf > Maf_crit)
+            (less_than_Maf_crit,) = np.where(self._Maf <= Maf_crit)
+
+            self._Saf[less_than_Maf_crit] = self._Maf[less_than_Maf_crit]/\
+                (self._phi_c_a[less_than_Maf_crit]*(1-self._phi_f_a[less_than_Maf_crit])*self._rho_s*self._area)
+            self._Saf[greater_than_Maf_crit] = (self._Maf[greater_than_Maf_crit]/\
+                ((1-self._phi_f_a[greater_than_Maf_crit])*self._rho_s*self._area)\
+                + self._d95*((1-self._phi_c_a[greater_than_Maf_crit])/\
+                (1-self._phi_f_a[greater_than_Maf_crit])))*(1/(self._phi_c_a[greater_than_Maf_crit] + 1))
+
             self._Sa[:] = np.maximum(self._Sac, self._Saf)
         else:
             self._Maf = grid.add_zeros(
@@ -552,84 +557,75 @@ class TruckPassErosion(Component):
                 self.tire_tracks = self.calc_tire_tracks() 
                 if self._full_tire == False:
                     for i in range(len(self.tire_tracks[0:2])):
-                    
                         
-                        # for k in range(len(self.tire_tracks[0:2][i])):
-                        #     if self._Saf[self.tire_tracks[0:2][i][k]] <= self._Sac[self.tire_tracks[0:2][i][k]]:
-                        #         self._q_scat_f = self._scat_loss*\
-                        #             (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                        #             self._Sac[self.tire_tracks[0:2][i][k]])*\
-                        #             (1-self._phi_f)*self._phi_c*self._rho_s*self._area
-                        #         self._q_scat_c = self._scat_loss*\
-                        #             (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                        #             self._Sac[self.tire_tracks[0:2][i][k]])*\
-                        #             (1-self._phi_c)*self._rho_s*self._area
-                        #     else:
-                        #         self._q_scat_f = 0
-                        #         self._q_scat_c = 0
+                        rand = np.random.uniform(0.9, 1.1)
 
                         #Scattering flux + compression
-                        #Use list comprehension to speed things up a little
-                        self._q_scat_c = np.array([self._scat_loss*\
-                                        (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_c_a[self.tire_tracks[0:2][i][k]])*self._rho_s*self._area \
-                                        if self._Saf[self.tire_tracks[0:2][i][k]] \
-                                        <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
-                                        for k in range(len(self.tire_tracks[0:2][i]))\
-                                        ])
-                        self._q_scat_f = np.array([self._scat_loss*\
-                                        (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_f_a[self.tire_tracks[0:2][i][k]])*\
-                                        self._phi_c_a[self.tire_tracks[0:2][i][k]]*self._rho_s*self._area \
-                                        if self._Saf[self.tire_tracks[0:2][i][k]] \
-                                        <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
-                                        for k in range(len(self.tire_tracks[0:2][i]))\
-                                        ])
+                        (less_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]]<\
+                            self._Sac[self.tire_tracks[0:2][i]])
 
-                        self._phi_c_s[self.tire_tracks[0:2][i]] -= self._comp
-                        self._phi_f_s[self.tire_tracks[0:2][i]] -= self._comp
-                        self._phi_c_a[self.tire_tracks[0:2][i]] -= self._comp
-                        self._phi_f_a[self.tire_tracks[0:2][i]] -= self._comp
+                        q_scat_c = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
+                        q_scat_f = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
+
+                        q_scat_c[less_than_Sac] = self._scat_loss*rand*\
+                                        (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        (1-self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        self._rho_s*self._area
+
+                        q_scat_f[less_than_Sac] = self._scat_loss*rand*\
+                                        (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        (1-self._phi_f_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]]*\
+                                        self._rho_s*self._area
+
+                        phi_limit = 0.31
+                        (greater_than_phi_lim,) = np.where(self._phi_c_s[self.tire_tracks[0:2][i]] >= phi_limit)
+                        self._phi_c_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_f_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_c_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_f_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
 
                         self._Msc[self.tire_tracks[2:4][i]] += \
-                            self._q_scat_c*3/4
+                            q_scat_c*3/4
                         self._Msc[self.tire_tracks[4:][i]] += \
-                            self._q_scat_c*1/4
+                            q_scat_c*1/4
                         self._Msc[self.tire_tracks[0:2][i]] -= \
-                            self._q_scat_c
+                            q_scat_c
 
                         self._Msf[self.tire_tracks[0:2][i]] -= \
-                            self._q_scat_f
+                            q_scat_f
                         self._Maf[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
                         self._sed_added[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
                         self._sed_scat[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
                         
                         
                 elif self._full_tire == True:
                     for i in range(len(self.tire_tracks[0:2])):
                         #Scattering flux
-                        self._q_scat_c = np.array([self._scat_loss*\
-                                        (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_c[self.tire_tracks[0:2][i][k]])*self._rho_s*self._area \
-                                        if self._Saf[self.tire_tracks[0:2][i][k]] \
-                                        <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
-                                        for k in range(len(self.tire_tracks[0:2][i]))\
-                                        ])
-                        self._q_scat_f = np.array([self._scat_loss*\
-                                        (1 - self._Saf[self.tire_tracks[0:2][i][k]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][k]])*\
-                                        (1-self._phi_f[self.tire_tracks[0:2][i][k]])*\
-                                        self._phi_c[self.tire_tracks[0:2][i][k]]*self._rho_s*self._area \
-                                        if self._Saf[self.tire_tracks[0:2][i][k]] \
-                                        <= self._Sac[self.tire_tracks[0:2][i][k]] else 0\
-                                        for k in range(len(self.tire_tracks[0:2][i]))\
-                                        ])
+                        (greater_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]] >=\
+                             self._Sac[self.tire_tracks[0:2][i][k]])
+                        (less_than_Sac,) = np.where(sself._Saf[self.tire_tracks[0:2][i]]<\
+                            self._Sac[self.tire_tracks[0:2][i]])
+
+                        self._q_scat_c[less_than_Sac] = self._scat_loss*rand*\
+                                        (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        (1-self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        self._rho_s*self._area
+                        self._q_scat_c[greater_than_Sac] = 0.0
+
+                        self._q_scat_f[less_than_Sac] = self._scat_loss*rand*\
+                                        (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        (1-self._phi_f_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                        self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]]*\
+                                        self._rho_s*self._area
+                        self._q_scat_f[greater_than_Sac] = 0.0
 
                         self._Msc[self.tire_tracks[2:4][i]] += \
                             self._q_scat_c
@@ -672,31 +668,37 @@ class TruckPassErosion(Component):
                     # +self._q_cs[self.tire_tracks[0:2]]
                 
                 Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
-                for i in range(len(self._Maf)):
-                    if self._Maf[i] <= Maf_crit[i]:
-                        self._Saf[i] = self._Maf[i]/(self._phi_c_a[i]*(1-self._phi_f_a[i])*self._rho_s*self._area)
-                    elif self._Maf[i] > Maf_crit[i]:
-                        self._Saf[i] = (self._Maf[i]/((1-self._phi_f_a[i])*self._rho_s*self._area)\
-                            + self._d95*((1-self._phi_c_a[i])/(1-self._phi_f_a[i])))*(1/(self._phi_c_a[i] + 1))
+                (greater_than_Maf_crit,) = np.where(self._Maf > Maf_crit)
+                (less_than_Maf_crit,) = np.where(self._Maf <= Maf_crit)
+                self._Saf[less_than_Maf_crit] = self._Maf[less_than_Maf_crit]/\
+                    (self._phi_c_a[less_than_Maf_crit]*(1-self._phi_f_a[less_than_Maf_crit])*self._rho_s*self._area)
+                self._Saf[greater_than_Maf_crit] = (self._Maf[greater_than_Maf_crit]/\
+                    ((1-self._phi_f_a[greater_than_Maf_crit])*self._rho_s*self._area)\
+                    + self._d95*((1-self._phi_c_a[greater_than_Maf_crit])/\
+                    (1-self._phi_f_a[greater_than_Maf_crit])))*(1/(self._phi_c_a[greater_than_Maf_crit] + 1))
                         
 
                 self._Ssc[:] = self._Msc/((1-self._phi_c_s)*self._rho_s*self._area)
                 Msf_crit = self._phi_c_s*self._Ssc*(1-self._phi_f_s)*self._rho_s*self._area
-                for i in range(len(self._Msf)):
-                    if self._Msf[i] <= Msf_crit[i]:
-                        self._Ssf[i] = self._Msf[i]/(self._phi_c_s[i]*(1-self._phi_f_s[i])*self._rho_s*self._area)
-                    else:
-                        self._Ssf[i] = (self._Msf[i]/((1-self._phi_f_s[i])*self._rho_s*self._area) \
-                            + self._Ssc[i]*((1-self._phi_c_s[i])/(1-self._phi_f_s[i])))*(1/(self._phi_c_s[i] + 1))
+                (greater_than_Msf_crit,) = np.where(self._Msf > Msf_crit)
+                (less_than_Msf_crit,) = np.where(self._Msf <= Msf_crit)
+                self._Ssf[less_than_Msf_crit] = self._Msf[less_than_Msf_crit]/\
+                    (self._phi_c_s[less_than_Msf_crit]*(1-self._phi_f_s[less_than_Msf_crit])*self._rho_s*self._area)
+                self._Ssf[greater_than_Msf_crit] = (self._Msf[greater_than_Msf_crit]/\
+                    ((1-self._phi_f_s[greater_than_Msf_crit])*self._rho_s*self._area) \
+                    + self._Ssc[greater_than_Msf_crit]*((1-self._phi_c_s[greater_than_Msf_crit])/\
+                    (1-self._phi_f_s[greater_than_Msf_crit])))*(1/(self._phi_c_s[greater_than_Msf_crit] + 1))
 
                 self._Sbf[:] = self._Mbf/((1-self._phi_f_b)*self._rho_s*self._area)
                 Mbc_crit = self._phi_f_b*self._Sbf*(1-self._phi_c_b)*self._rho_s*self._area
-                for i in range(len(self._Mbc)):
-                    if self._Mbc[i] <= Mbc_crit[i]:
-                        self._Sbc[i] = self._Mbc[i]/(self._phi_f_b[i]*(1-self._phi_c_b[i])*self._rho_s*self._area)
-                    else:
-                        self._Sbc[i] = (self._Mbc[i]/((1-self._phi_c_b[i])*self._rho_s*self._area) \
-                            + self._Sbf[i]*((1-self._phi_f_b[i])/(1-self._phi_c_b[i])))*(1/(self._phi_f_b[i] + 1))
+                (greater_than_Mbc_crit,) = np.where(self._Mbc > Mbc_crit)
+                (less_than_Mbc_crit,) = np.where(self._Mbc <= Mbc_crit)
+                self._Sbc[less_than_Mbc_crit] = self._Mbc[less_than_Mbc_crit]/\
+                    (self._phi_f_b[less_than_Mbc_crit]*(1-self._phi_c_b[less_than_Mbc_crit])*self._rho_s*self._area)
+                self._Sbc[greater_than_Mbc_crit] = (self._Mbc[greater_than_Mbc_crit]/\
+                    ((1-self._phi_c_b[greater_than_Mbc_crit])*self._rho_s*self._area) \
+                    + self._Sbf[greater_than_Mbc_crit]*((1-self._phi_f_b[greater_than_Mbc_crit])/\
+                    (1-self._phi_c_b[greater_than_Mbc_crit])))*(1/(self._phi_f_b[greater_than_Mbc_crit] + 1))
 
         #update outputs
         self._Mb[:] = self._Mbf + self._Mbc
