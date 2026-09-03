@@ -500,7 +500,7 @@ class TruckPassErosion(Component):
             self._out_left_far = [self._out_center_far[0]-1, self._out_center_far[1]-1]
             
             val = np.random.choice(["center", "right",\
-                "left"])
+                "left"], p = [0.50,0.25,0.25])
 
             if val == "center":
                 self._tracks = [self._center_tracks[0], self._center_tracks[1], self._out_center_close[0],\
@@ -522,7 +522,7 @@ class TruckPassErosion(Component):
             self._left_tracks = [self._right_tracks[0]-1, self._right_tracks[1]-1]
             self._out_left = [self._out_right[0]-1, self._out_right[1]-1]
 
-            val = np.random.choice(["right", "left"])
+            val = np.random.choice(["right", "left"], p = [0.5,0.5])
 
             if val == "right":
                 self._tracks = [self._right_tracks[0], self._right_tracks[1], self._out_right[0],\
@@ -558,7 +558,6 @@ class TruckPassErosion(Component):
                 if self._full_tire == False:
                     for i in range(len(self.tire_tracks[0:2])):
                         
-                        rand = np.random.uniform(0.9, 1.1)
 
                         #Scattering flux + compression
                         (less_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]]<\
@@ -567,13 +566,13 @@ class TruckPassErosion(Component):
                         q_scat_c = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
                         q_scat_f = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
 
-                        q_scat_c[less_than_Sac] = self._scat_loss*rand*\
+                        q_scat_c[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         self._rho_s*self._area
 
-                        q_scat_f[less_than_Sac] = self._scat_loss*rand*\
+                        q_scat_f[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_f_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
@@ -612,14 +611,14 @@ class TruckPassErosion(Component):
                         (less_than_Sac,) = np.where(sself._Saf[self.tire_tracks[0:2][i]]<\
                             self._Sac[self.tire_tracks[0:2][i]])
 
-                        self._q_scat_c[less_than_Sac] = self._scat_loss*rand*\
+                        self._q_scat_c[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         self._rho_s*self._area
                         self._q_scat_c[greater_than_Sac] = 0.0
 
-                        self._q_scat_f[less_than_Sac] = self._scat_loss*rand*\
+                        self._q_scat_f[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_f_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
