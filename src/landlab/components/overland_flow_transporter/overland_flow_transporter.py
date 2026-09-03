@@ -193,6 +193,7 @@ class OverlandFlowTransporter(Component):
         longitudinal_slope = 0.125,
         d95=0.019,
         flow_accumulator=None,
+        depression_finder=None,
     ):
         """Initialize OverlandFlowTransporter.
         
@@ -230,6 +231,7 @@ class OverlandFlowTransporter(Component):
         self._longitudinal_slope = longitudinal_slope
         self._d95 = d95
         self._fa = flow_accumulator
+        self._df = depression_finder
         
         # Fields and arrays
         self._topographic_elev = grid.at_node["topographic__elevation"]
@@ -428,6 +430,7 @@ class OverlandFlowTransporter(Component):
         self._topographic_elev[:] = z_eff
 
         self._fa.run_one_step()
+        self._df.map_depressions()
         Q_flood = self.grid.at_node['surface_water__discharge'].copy()
         q_flood = Q_flood/self.grid.dx
 
