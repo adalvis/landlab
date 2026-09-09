@@ -228,7 +228,7 @@ class TruckPassErosion(Component):
         rho_s = 2650, #kg/m^3
         porosity_c = 0.35,
         porosity_f = 0.35,
-        u_ps = 6.3e-6, #(10.3g/m2) converted to depth
+        u_ps = 2.18e-4, #(10.3g/m2) converted to kg/node
         u_pb = 2.3e-6, #current best guess
         k_cs = 6e-7, #current best guess
         k_cb = 2e-7, #current best guess
@@ -324,7 +324,7 @@ class TruckPassErosion(Component):
             self._phi_f_b = grid.add_ones("phi_f_b", at="node", dtype=float)
             self._phi_f_b *= porosity_f
 
-        self._u_ps = self._phi_c_s*u_ps*(1-self._phi_f_s)*self._rho_s*self._area
+        self._u_ps = u_ps #already in kg/node, no conversion needed
         self._u_pb = self._phi_c_b*u_pb*(1-self._phi_f_b)*self._rho_s*self._area
         self._k_cs = self._phi_c_s*k_cs*(1-self._phi_f_s)*self._rho_s*self._area
         self._k_cb = self._phi_c_b*k_cb*(1-self._phi_f_b)*self._rho_s*self._area
@@ -500,7 +500,7 @@ class TruckPassErosion(Component):
             self._out_left_far = [self._out_center_far[0]-1, self._out_center_far[1]-1]
             
             val = np.random.choice(["center", "right",\
-                "left"], p = [0.50,0.25,0.25])
+                "left"])#, p = [0.50,0.25,0.25])
 
             if val == "center":
                 self._tracks = [self._center_tracks[0], self._center_tracks[1], self._out_center_close[0],\
