@@ -7,7 +7,6 @@ Last updated: May 21, 2026
 """
 
 from landlab import Component
-import random as rnd
 import numpy as np
 
 
@@ -238,7 +237,6 @@ class TruckPassErosion(Component):
         F_af0 = 0.5, #initial fraction of fines in interstitial spaces of coarse in active layer
         F_sf0 = 1,
         F_bc0 = 0.5,
-        rand_seed = 0,
     ):
         """Initialize TruckPassErosion.
 
@@ -287,9 +285,6 @@ class TruckPassErosion(Component):
         self._F_af0 = F_af0
         self._F_sf0 = F_sf0
         self._F_bc0 = F_bc0
-
-        self._rand_seed = rand_seed
-        np.random.seed(rand_seed)
 
         #Get porosity as fields for each layer
         if "phi_c_a" in grid.at_node:
