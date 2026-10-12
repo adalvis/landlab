@@ -445,6 +445,7 @@ class OverlandFlowTransporter(Component):
             q_flood**0.6 #* self._n_f**1.5
 
         self._shear_stress = A * self._n_t**(0.6)#(-0.9)
+        self._f_s[:] = (self._n_f / self._n_t) ** 1.5
         excess = self._shear_stress - self._tau_c
 
         (excess_more_0,) = np.where(excess > 0.0)
@@ -537,7 +538,7 @@ class OverlandFlowTransporter(Component):
 
             t += self._step_dt
 
-            self._Maf[:] = self.rk4_step(self._Maf, self._step_dt)
+            self._Maf[:] = self.rk4_step(self._Maf, self._step_dt) #self._Maf+self.dmdt(self._Maf, self._step_dt)*self._step_dt
 
             self._Maf_plot.append(self._Maf[40])
             self._t_plot.append(t)
