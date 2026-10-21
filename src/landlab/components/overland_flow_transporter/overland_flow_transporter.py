@@ -192,6 +192,7 @@ class OverlandFlowTransporter(Component):
         porosity_c = 0.35,
         longitudinal_slope = 0.125,
         d95=0.019,
+        row=15,
         flow_accumulator=None,
         depression_finder=None,
     ):
@@ -230,6 +231,7 @@ class OverlandFlowTransporter(Component):
         self._tau_c = tau_c
         self._longitudinal_slope = longitudinal_slope
         self._d95 = d95
+        self._row = row
         self._fa = flow_accumulator
         self._df = depression_finder
         
@@ -272,7 +274,7 @@ class OverlandFlowTransporter(Component):
         self._sediment_outflux = grid.at_node["sediment__mass_outflux"]
         self._dmdt = grid.at_node["sediment__rate_of_change"]
 
-        self._Maf_plot = [self._Maf[40]]
+        self._Maf_plot = [self._Saf[self.grid.nodes[self._row, :]]/self._Sac[self.grid.nodes[self._row, :]]]#self._Maf[self.grid.nodes[self._row,:]]]
         self._t_plot = [0]
         
     @property
@@ -284,118 +286,7 @@ class OverlandFlowTransporter(Component):
     def mannings_n(self):
         """Manning's roughness at each node"""
         return self._n_t
- #%%       
-    # def calc_overland_roughness(self):
-    #     """Calculate overland flow surface roughness and shear stress partitioning ratio."""
-    #     self._unit_discharge = self._discharge / self.grid.dx
 
-    #     for i in range(len(self._unit_discharge)):
-    #         if self._unit_discharge[i] > 0:
-    #             self._n_f[i] = self._n_f[i]
-    #             if self._Saf[i] <= self._Sac[i]:
-    #                 self._n_t[i] = self._n_c + (self._Maf[i] / self._Ma[i]) \
-    #                     * (self._n_f[i] - self._n_c)
-    #             else:
-    #                 self._n_t[i] = self._n_f[i]
-    #             self._f_s[i] = (self._n_f[i] / self._n_t[i]) ** 1.5
-    #         else:
-    #             self._n_f[i] = 0
-    #             self._n_t[i] = 0
-    #             self._f_s[i] = 0
-
-    # def calc_overland_depth(self):
-    #     """Compute overland flow depth using a safe formulation."""
-    #     self.calc_overland_roughness()
-
-    #     slope_eps = 1e-8  # prevents divide-by-zero in sqrt(slope)
-    #     self._slope_safe = np.maximum(self._slope, slope_eps)   
-
-    #     # initialize depth array to zero
-    #     self._water_depth[:] = 0.0
-
-    #     # loop over nodes (safe computation)
-    #     for i in range(len(self._slope)):
-    #         if self._unit_discharge[i] > 0:
-    #             safe_denom = np.sqrt(self._slope_safe[i])
-    #             raw = (self._n_t[i] * self._unit_discharge[i]) / safe_denom
-
-    #         # guard against negatives and overflow
-    #             if raw > 0 and np.isfinite(raw):
-    #                 self._water_depth[i] = raw ** (3.0 / 5.0)
-    #             else:
-    #                 self._water_depth[i] = 0.0
-    #         else:
-    #             self._water_depth[i] = 0.0
-
-    #     # replace any NaN or inf with zero
-    #     self._water_depth[~np.isfinite(self._water_depth)] = 0.0
-
-    #     # cap to a maximum water depth of 0.3 m
-    #     self._water_depth[:] = np.minimum(self._water_depth, 0.3)
-
-    # def calc_overland_shear_stress(self):   
-    #     """Calculate and return overland flow partitioned shear stress.
-    #     """
-    #     self.calc_overland_depth()
-
-    #     self._shear_stress = self._rho_w*self._g*self._water_depth*self._slope_safe*self._f_s
-
-    # def calc_overland_transport_capacity(self):
-    #     """Calculate and return transport capacity.
-    #     """
-    #     self.calc_overland_shear_stress()
-
-    #     (greater_than_tc,) = np.where(self._shear_stress >= self._tau_c)
-    #     (less_than_tc,) = np.where(self._shear_stress < self._tau_c)
-
-    #     self._transport_capacity[greater_than_tc] = (
-    #                 ((10**(-4.348))
-    #                 / ((self._d50)**(0.811)))
-    #                 * (self._shear_stress[greater_than_tc]-self._tau_c)**(2.457)
-    #                 ) * self.grid.dx #[kg/s]
-    #     self._transport_capacity[less_than_tc] = 0.0
-
-    #     self._transport_capacity[~np.isfinite(self._transport_capacity)] = 0.0
-    #     self._transport_capacity[:] = np.maximum(self._transport_capacity, 0.0)
-
-    # def calc_overland_sediment_rate_of_change(self, t, m, dt):
-    #     """Update the rate of mass change of sediment at each core node.
-    #     """
-    #     self.calc_overland_transport_capacity()
-    #     stack_flip_ud = np.flipud(self._node_stack)
-        
-    #     n_nodes = stack_flip_ud.shape[0]
-    #     self._sediment_influx[:] = 0.0
-    #     for i in range(n_nodes):
-    #         node_id = stack_flip_ud[i]
-
-    #         if self._unit_discharge[node_id] > 0 and (self._receiver_node[node_id] != node_id):
-    #             self._sediment_outflux[node_id] = min(
-    #                 (self._sediment_influx[node_id]+self._Maf[node_id] / (dt)),
-    #                 self._transport_capacity[node_id])
-                
-    #             self._sediment_influx[self._receiver_node[node_id]] += self._sediment_outflux[node_id]
-    #         else:
-    #             self._sediment_outflux[node_id] = 0
-
-    #         self._dmdt[node_id] = self._sediment_influx[node_id] - self._sediment_outflux[node_id]
-        
-    #     return(self._dmdt)
-       
-        # for i in range(len(self._transport_capacity)):
-        #     self._sediment_outflux[i] = min(
-        #         self._transport_capacity[i], 
-        #         (self._Maf[i] / (dt*86400))
-        #         )
-
-        # self._sediment_influx[:] = 0.0
-        # for c in cores:  # send sediment downstream
-        #     r = self._receiver_node[c]
-        #     self._sediment_influx[r] += self._sediment_outflux[c]
-
-        # self._dmdt[cores] = (
-        #     self._sediment_influx[cores] - self._sediment_outflux[cores]
-        #     )
 #%%
     ## ======================================================
     ## Calculate differential
@@ -476,48 +367,6 @@ class OverlandFlowTransporter(Component):
         k4 = self.dmdt(Maf + dt*k3, dt)
         return Maf + (dt/6.0)*(k1 + 2.0*k2 + 2.0*k3 + k4)
 
-    ## ======================================================
-    ## Adaptive step via step-doubling
-    ##    - one full step  (dt)      -> M_big
-    ##    - two half steps (dt/2)    -> M_small
-    ##    - error estimate: |M_small - M_big|
-    ## ======================================================
-    def adaptive_step(self, Maf, dt):
-        dt_min  = 500
-        dt_max = 20000 # largest allowed step
-        tol = 1e-6 # absolute error tolerance per step
-        safety = 0.9  # safety factor for step update
-        p = 4 # order of RK4 (used in step-size formula)
-
-        # one full step
-        M_big = self.rk4_step(Maf, dt)
-        # two half steps
-        M_half = self.rk4_step(Maf, 0.5*dt)
-        M_small = self.rk4_step(M_half, 0.5*dt)
-
-        # local truncation error estimate (Richardson)
-        err = np.max(abs(M_small - M_big))
-
-        # scaled error relative to tolerance
-        # (5th-order accurate combination for the accepted value)
-        if err == 0.0:
-            dt_new = min(dt * 5.0, dt_max)
-            return M_small + (M_small - M_big)/15.0, dt, dt_new, True
-
-        
-        # proposed new step size
-        dt_new = safety * dt * (tol/err)**(1.0/(p+1))
-        dt_new = min(max(dt_new, dt_min), dt_max)
-
-        if err <= tol:
-            # ACCEPT: Richardson-extrapolated (5th order) value
-            M_acc = M_small + (M_small - M_big)/15.0
-            return M_acc, dt, dt_new, True
-        else:
-            # REJECT: retry with smaller step
-            return Maf, dt, dt_new, False
-
-
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
         """
@@ -535,31 +384,12 @@ class OverlandFlowTransporter(Component):
 
         while t < self._storm_dt:
             self._step_dt = min(self._step_dt, self._storm_dt - t)
-
             t += self._step_dt
 
-            self._Maf[:] = self.rk4_step(self._Maf, self._step_dt) #self._Maf+self.dmdt(self._Maf, self._step_dt)*self._step_dt
-
-            self._Maf_plot.append(self._Maf[40])
-            self._t_plot.append(t)
+            self._Maf[:] = self.rk4_step(self._Maf, self._step_dt)
 
             self._Maf[self.grid.nodes[0,0:33]] -= self._sediment_influx[self.grid.nodes[0,0:33]]*self._step_dt
-            # # self._Maf[self.grid.nodes[1:,0]] -= self._sediment_influx[self.grid.nodes[1:,0]]*self._step_dt
-            # # self._Maf[self.grid.nodes[1:,63]] -= self._sediment_influx[self.grid.nodes[1:,63]]*self._step_dt
             self._Maf[self.grid.nodes[0,33:64]] -= self._sediment_influx[self.grid.nodes[0,33:64]]*self._step_dt
-
-            # M_new, dt_used, dt_new, accepted = self.adaptive_step(self._Maf, self._step_dt)
-
-            # if accepted:
-            #     t += dt_used
-            #     for i in range(len(self._Maf)):
-            #         self._Maf[i] = max(M_new[i], 0.0)     ## physical: storage >= 0
-            #     self._step_dt = dt_new              ## grow/shrink for next step
-            # else:
-            #     self._step_dt = dt_new              ## shrink and retry (no advance)
-
-            # if self._step_dt < dt_min:
-            #     raise RuntimeError("Step size underflow: problem may be too stiff.")
 
         Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 
@@ -574,6 +404,9 @@ class OverlandFlowTransporter(Component):
             (1-self._phi_f_a[greater_than_Maf_crit])))*(1/(self._phi_c_a[greater_than_Maf_crit] + 1))
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
+        
+        self._Maf_plot.append(self._Saf[self.grid.nodes[self._row, :]]/self._Sac[self.grid.nodes[self._row, :]])#self._Maf[self.grid.nodes[self._row,:]])
+        self._t_plot.append(t)
 
         self._topographic_elev += (
             self._Sa - self._Sa_init
