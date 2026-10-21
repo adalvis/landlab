@@ -231,7 +231,7 @@ class TruckPassErosion(Component):
         u_pb = 2.3e-6, #current best guess
         k_cs = 6e-7, #current best guess
         k_cb = 2e-7, #current best guess
-        scat_loss = 8e-5, #current best guess,
+        scat_loss = 8e-4, #current best guess,
         compression = 7e-4, #current best guess,
         d95 = 0.019,
         F_af0 = 0.5, #initial fraction of fines in interstitial spaces of coarse in active layer
@@ -557,8 +557,7 @@ class TruckPassErosion(Component):
                 if self._full_tire == False:
                     for i in range(len(self.tire_tracks[0:2])):
                         
-
-                        #Scattering flux + compression
+                        # Scattering flux + compression
                         (less_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]]<\
                             self._Sac[self.tire_tracks[0:2][i]])
 
@@ -606,38 +605,46 @@ class TruckPassErosion(Component):
                     for i in range(len(self.tire_tracks[0:2])):
                         #Scattering flux
                         (greater_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]] >=\
-                             self._Sac[self.tire_tracks[0:2][i][k]])
-                        (less_than_Sac,) = np.where(sself._Saf[self.tire_tracks[0:2][i]]<\
+                             self._Sac[self.tire_tracks[0:2][i]])
+                        (less_than_Sac,) = np.where(self._Saf[self.tire_tracks[0:2][i]]<\
                             self._Sac[self.tire_tracks[0:2][i]])
 
-                        self._q_scat_c[less_than_Sac] = self._scat_loss*\
+                        q_scat_c = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
+                        q_scat_f = np.zeros(len(self._Saf[self.tire_tracks[0:2][i]]))
+                        
+                        q_scat_c[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         self._rho_s*self._area
-                        self._q_scat_c[greater_than_Sac] = 0.0
 
-                        self._q_scat_f[less_than_Sac] = self._scat_loss*\
+                        q_scat_f[less_than_Sac] = self._scat_loss*\
                                         (1 - self._Saf[self.tire_tracks[0:2][i][less_than_Sac]]/\
-                                        self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
+                                         self._Sac[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         (1-self._phi_f_a[self.tire_tracks[0:2][i][less_than_Sac]])*\
                                         self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]]*\
                                         self._rho_s*self._area
-                        self._q_scat_f[greater_than_Sac] = 0.0
+
+                        phi_limit = 0.31
+                        (greater_than_phi_lim,) = np.where(self._phi_c_s[self.tire_tracks[0:2][i]] >= phi_limit)
+                        self._phi_c_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_f_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_c_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_f_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
 
                         self._Msc[self.tire_tracks[2:4][i]] += \
-                            self._q_scat_c
+                            q_scat_c
                         self._Msc[self.tire_tracks[0:2][i]] -= \
-                            self._q_scat_c
+                            q_scat_c
 
                         self._Msf[self.tire_tracks[0:2][i]] -= \
-                            self._q_scat_f
+                            q_scat_f
                         self._Maf[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
                         self._sed_added[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
                         self._sed_scat[self.tire_tracks[0:2][i]] += \
-                            self._q_scat_f
+                            q_scat_f
 
                 #Pumping fluxes (this is per truck pass)
                 self._q_ps = self._u_ps*np.ones(len(self._Ms))
@@ -659,11 +666,9 @@ class TruckPassErosion(Component):
                     self._q_pb[self.tire_tracks[0:2]]
 
                 #update fines in active layer         
-                self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]\
-                    # + self._q_cs[self.tire_tracks[0:2]]
+                self._sed_added[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
                 self._sed_pump[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
-                self._Maf[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]\
-                    # +self._q_cs[self.tire_tracks[0:2]]
+                self._Maf[self.tire_tracks[0:2]] += self._q_ps[self.tire_tracks[0:2]]
                 
                 Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 (greater_than_Maf_crit,) = np.where(self._Maf > Maf_crit)
@@ -705,12 +710,6 @@ class TruckPassErosion(Component):
         self._Sb[:] = np.maximum(self._Sbf, self._Sbc)
         self._Ss[:] = np.maximum(self._Ssf, self._Ssc)
         self._Sa[:] = np.maximum(self._Saf, self._Sac)
-
-        # self._mass_cons += (self._Ma - self._Ma_init).sum()+\
-        #     (self._Ms - self._Ms_init).sum()+\
-        #     (self._Mb - self._Mb_init).sum()
-            
-        # print("Mass conservation:", np.round(self._mass_cons,4))
 
         self._ballast_elev += (
             self._Sb - self._Sb_init
