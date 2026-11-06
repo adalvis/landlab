@@ -577,12 +577,20 @@ class TruckPassErosion(Component):
                                         self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]]*\
                                         self._rho_s*self._area
 
-                        phi_limit = 0.31
+                        phi_limit = 0.28
                         (greater_than_phi_lim,) = np.where(self._phi_c_s[self.tire_tracks[0:2][i]] >= phi_limit)
-                        self._phi_c_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
-                        self._phi_f_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
-                        self._phi_c_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
-                        self._phi_f_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
+                        self._phi_c_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp*\
+                                        (self._Saf[self.tire_tracks[0:2][i][greater_than_phi_lim]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][greater_than_phi_lim]])
+                        self._phi_f_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp*\
+                                        (self._Saf[self.tire_tracks[0:2][i][greater_than_phi_lim]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][greater_than_phi_lim]])
+                        self._phi_c_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp*\
+                                        (self._Saf[self.tire_tracks[0:2][i][greater_than_phi_lim]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][greater_than_phi_lim]])
+                        self._phi_f_a[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp*\
+                                        (self._Saf[self.tire_tracks[0:2][i][greater_than_phi_lim]]/\
+                                        self._Sac[self.tire_tracks[0:2][i][greater_than_phi_lim]])
 
                         self._Msc[self.tire_tracks[2:4][i]] += \
                             q_scat_c*3/4
@@ -625,7 +633,7 @@ class TruckPassErosion(Component):
                                         self._phi_c_a[self.tire_tracks[0:2][i][less_than_Sac]]*\
                                         self._rho_s*self._area
 
-                        phi_limit = 0.31
+                        phi_limit = 0.28
                         (greater_than_phi_lim,) = np.where(self._phi_c_s[self.tire_tracks[0:2][i]] >= phi_limit)
                         self._phi_c_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
                         self._phi_f_s[self.tire_tracks[0:2][i][greater_than_phi_lim]] -= self._comp
