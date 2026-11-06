@@ -274,7 +274,7 @@ class OverlandFlowTransporter(Component):
         self._sediment_outflux = grid.at_node["sediment__mass_outflux"]
         self._dmdt = grid.at_node["sediment__rate_of_change"]
 
-        self._Maf_plot = [self._Saf[self.grid.nodes[self._row, :]]/self._Sac[self.grid.nodes[self._row, :]]]#self._Maf[self.grid.nodes[self._row,:]]]
+        self._Maf_plot = [self._Maf[self.grid.nodes[self._row, :]]/self._Mac[self.grid.nodes[self._row, :]]]#self._Maf[self.grid.nodes[self._row,:]]]
         self._t_plot = [0]
         
     @property
@@ -305,6 +305,8 @@ class OverlandFlowTransporter(Component):
         n_nodes = stack_flip_ud.shape[0]
         
         self._sediment_influx[:] = 0
+        sediment_influx = self._sediment_influx.copy()
+        sediment_outflux = self._sediment_outflux.copy()
 
         Mc = self._phi_c_a*self._Sac*(1-self._phi_f_a)*self._rho_s*self._area
         zed = Maf / Mc
@@ -333,9 +335,9 @@ class OverlandFlowTransporter(Component):
 
         K = 10**(-4.348) / (self._rho_s * self._d50**0.811)
         A = self._rho_w * self._g * S_flood**0.7 *\
-            q_flood**0.6 #* self._n_f**1.5
+            q_flood**0.6 * self._n_f**1.5
 
-        self._shear_stress = A * self._n_t**(0.6)#(-0.9)
+        self._shear_stress = A * self._n_t**(-0.9)#(0.6)
         self._f_s[:] = (self._n_f / self._n_t) ** 1.5
         excess = self._shear_stress - self._tau_c
 
@@ -351,21 +353,23 @@ class OverlandFlowTransporter(Component):
             node_id = stack_flip_ud[i]
 
             if (self._unit_discharge[node_id] > 0) and (self._receiver_node[node_id] != node_id):
-                self._sediment_outflux[node_id] = min(E[node_id], avail[node_id])
-                self._sediment_influx[self._receiver_node[node_id]] += self._sediment_outflux[node_id]
+                sediment_outflux[node_id] = min(E[node_id], avail[node_id])
+                sediment_influx[self._receiver_node[node_id]] += sediment_outflux[node_id]
             else:
-                self._sediment_outflux[node_id] = 0
-        return (self._sediment_influx-self._sediment_outflux)
+                sediment_outflux[node_id] = 0
+        return (sediment_influx-sediment_outflux, sediment_influx)
 
     ## ======================================================
     ## RK4 single step (fixed dt)
     ## ======================================================
     def rk4_step(self, Maf, dt):
-        k1 = self.dmdt(Maf, dt)
-        k2 = self.dmdt(Maf + 0.5*dt*k1, dt)
-        k3 = self.dmdt(Maf + 0.5*dt*k2, dt)
-        k4 = self.dmdt(Maf + dt*k3, dt)
-        return Maf + (dt/6.0)*(k1 + 2.0*k2 + 2.0*k3 + k4)
+        k1,s1 = self.dmdt(Maf, dt)
+        k2,s2 = self.dmdt(Maf + 0.5*dt*k1, dt)
+        k3,s3 = self.dmdt(Maf + 0.5*dt*k2, dt)
+        k4,s4 = self.dmdt(Maf + dt*k3, dt)
+        
+        self._sediment_influx[:] = (1/6.0)*(s1 + 2.0*s2 + 2.0*s3 + s4)
+        return (Maf + (dt/6.0)*(k1 + 2.0*k2 + 2.0*k3 + k4))
 
     def run_one_step(self, dt):
         """Advance solution by time interval dt.
@@ -388,8 +392,7 @@ class OverlandFlowTransporter(Component):
 
             self._Maf[:] = self.rk4_step(self._Maf, self._step_dt)
 
-            self._Maf[self.grid.nodes[0,0:33]] -= self._sediment_influx[self.grid.nodes[0,0:33]]*self._step_dt
-            self._Maf[self.grid.nodes[0,33:64]] -= self._sediment_influx[self.grid.nodes[0,33:64]]*self._step_dt
+            self._Maf[self.grid.nodes[0,:]] -= self._sediment_influx[self.grid.nodes[0,:]]*self._step_dt
 
         Maf_crit = self._phi_c_a*self._d95*(1-self._phi_f_a)*self._rho_s*self._area
                 
@@ -405,7 +408,7 @@ class OverlandFlowTransporter(Component):
 
         self._Sa[:] = np.maximum(self._Sac, self._Saf)
         
-        self._Maf_plot.append(self._Saf[self.grid.nodes[self._row, :]]/self._Sac[self.grid.nodes[self._row, :]])#self._Maf[self.grid.nodes[self._row,:]])
+        self._Maf_plot.append(self._Maf[self.grid.nodes[self._row, :]]/self._Mac[self.grid.nodes[self._row, :]])
         self._t_plot.append(t)
 
         self._topographic_elev += (
